@@ -1,0 +1,29 @@
+# =============================================================================
+# FEATURE ENGINEERING CONFIGURATION (None - Default)
+# =============================================================================
+#
+# PURPOSE: Controls whether to CREATE new features at runtime
+#
+# IMPORTANT:
+#   - This is SEPARATE from observation.input_features (which selects features)
+#   - When enabled=false: All features must exist in your data file
+#   - When enabled=true: Creates new columns (returns, log_returns, rolling stats)
+#
+# RECOMMENDATION:
+#   - Production: Keep enabled=false, create features in data pipeline (Kedro)
+#   - Testing: Use enabled=true for quick prototyping
+#
+# Other configs available:
+#   feature_engineering=none            # No engineering (this file - recommended)
+#   feature_engineering=simple_returns  # Creates returns_1 only
+#   feature_engineering=returns         # Creates returns_1/5/20, log_returns
+#   feature_engineering=full            # Creates all features + rolling stats (slow)
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# ENABLE/DISABLE FEATURE ENGINEERING
+# -----------------------------------------------------------------------------
+# Set to false to disable all runtime feature creation (recommended for production)
+# Set to true to enable feature engineering (see other configs for options)
+enabled: false

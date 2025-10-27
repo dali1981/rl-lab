@@ -24,8 +24,10 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.logger import Logger, configure
 
-from src.utils.mlflow_logger import MLflowOutputFormat
-from src.utils.callbacks import MLflowCallback, TradingMetricsCallback
+from rl_trading_lab.config import RootConfig
+from rl_trading_lab.config.agent import AgentConfig
+from rl_trading_lab.utils.mlflow_logger import MLflowOutputFormat
+from rl_trading_lab.utils.callbacks import MLflowCallback, TradingMetricsCallback
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +54,7 @@ class TradingAgentWrapper:
 
     def __init__(
         self,
-        agent_config: Dict[str, Any],
+        agent_config: AgentConfig,
         env: gym.Env,
         eval_env: Optional[gym.Env] = None,
         save_path: Optional[str] = None,
@@ -62,7 +64,7 @@ class TradingAgentWrapper:
         Initialize agent wrapper.
 
         Args:
-            agent_config: Agent configuration dict from Hydra
+            agent_config: Agent configuration Pydantic model
             env: Training environment
             eval_env: Evaluation environment (optional)
             save_path: Path to save models
@@ -85,7 +87,7 @@ class TradingAgentWrapper:
             norm_reward=True,   # Normalize rewards (critical for stability)
             clip_obs=10.0,      # Clip observations
             clip_reward=10.0,   # Clip rewards
-            gamma=agent_config.get("hyperparameters", {}).get("gamma", 0.99),
+            gamma=agent_config.hyperparameters.gamma,
         )
 
         if eval_env is not None:
@@ -104,7 +106,7 @@ class TradingAgentWrapper:
             self.eval_env = None
 
         # Get algorithm class
-        algo_name = agent_config.get("algorithm", "PPO").split(".")[-1]
+        algo_name = agent_config.algorithm.split(".")[-1]
         if algo_name not in ALGORITHMS:
             raise ValueError(f"Unknown algorithm: {algo_name}")
 
@@ -123,8 +125,8 @@ class TradingAgentWrapper:
 
     def _create_agent(self) -> BaseAlgorithm:
         """Create the SB3 agent"""
-        # Extract hyperparameters
-        hyperparams = self.config.get("hyperparameters", {})
+        # Get hyperparameters as dict
+        hyperparams = self.config.hyperparameters.model_dump()
 
         # Handle policy kwargs
         policy_kwargs = hyperparams.pop("policy_kwargs", None)
@@ -141,8 +143,8 @@ class TradingAgentWrapper:
             env=self.env,
             policy_kwargs=policy_kwargs,
             device=self.device,
-            verbose=self.config.get("verbose", 1),
-            tensorboard_log=self.config.get("tensorboard_log", None),
+            verbose=self.config.verbose,
+            tensorboard_log=self.config.tensorboard_log,
             **hyperparams
         )
 
@@ -156,7 +158,7 @@ class TradingAgentWrapper:
         All SB3 metrics (rollout/, train/, eval/) will be logged automatically.
         """
         # Get tensorboard log directory from agent config
-        tensorboard_log = self.config.get("tensorboard_log", None)
+        tensorboard_log = self.config.tensorboard_log
 
         # Create custom output formats list
         custom_output_formats = []
@@ -241,12 +243,12 @@ class TradingAgentWrapper:
         # Add MLflow logging callback
         mlflow_callback = MLflowCallback(
             log_freq=max(eval_freq // 10, 100) if eval_freq else 1000,
-            verbose=self.config.get("verbose", 0),
+            verbose=self.config.verbose,
         )
         callback_list.append(mlflow_callback)
 
         # Add trading metrics callback
-        trading_callback = TradingMetricsCallback(verbose=self.config.get("verbose", 0))
+        trading_callback = TradingMetricsCallback(verbose=self.config.verbose)
         callback_list.append(trading_callback)
 
         # Combine callbacks
@@ -390,32 +392,28 @@ class TradingAgentWrapper:
 
 
 def create_agent_from_config(
-    config: Dict[str, Any],
+    config: RootConfig,
     env: gym.Env,
     eval_env: Optional[gym.Env] = None,
 ) -> TradingAgentWrapper:
     """
-    Factory function to create agent from Hydra config.
+    Factory function to create agent from config.
 
     Args:
-        config: Full Hydra configuration
+        config: Full Pydantic configuration
         env: Training environment
         eval_env: Evaluation environment
 
     Returns:
         TradingAgentWrapper instance
     """
-    agent_config = config.get("agent", {})
-    experiment_config = config.get("experiment", {})
-    training_config = config.get("training", {})
-
     # Create wrapper
     wrapper = TradingAgentWrapper(
-        agent_config=agent_config,
+        agent_config=config.agent,
         env=env,
         eval_env=eval_env,
-        save_path=training_config.get("save_path", "checkpoints"),
-        device=experiment_config.get("device", "auto"),
+        save_path=config.training.save_path,
+        device=config.experiment.device,
     )
 
     return wrapper

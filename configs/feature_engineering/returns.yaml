@@ -1,0 +1,65 @@
+# =============================================================================
+# FEATURE ENGINEERING CONFIGURATION (Returns)
+# =============================================================================
+#
+# PURPOSE: Creates returns-based features at runtime
+#
+# IMPORTANT:
+#   - Creates NEW COLUMNS: returns_1, returns_5, returns_20, log_returns
+#   - These can then be used in observation.input_features
+#   - For production, prefer creating features in data pipeline (Kedro)
+#
+# CREATED FEATURES:
+#   - returns_1:   1-period percentage returns = (price[t] - price[t-1]) / price[t-1]
+#   - returns_5:   5-period percentage returns
+#   - returns_20:  20-period percentage returns
+#   - log_returns: Natural log returns = ln(price[t] / price[t-1])
+#
+# USAGE:
+#   uv run python experiments/train.py \
+#     observation=with_returns \
+#     feature_engineering=returns
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# ENABLE FEATURE ENGINEERING
+# -----------------------------------------------------------------------------
+enabled: true
+
+# -----------------------------------------------------------------------------
+# RETURNS FEATURES
+# -----------------------------------------------------------------------------
+# Create percentage returns for specified periods
+# Formula: (price[t] - price[t-n]) / price[t-n]
+add_returns: true
+return_periods: [1, 5, 20]  # Creates: returns_1, returns_5, returns_20
+
+# -----------------------------------------------------------------------------
+# LOG RETURNS FEATURES
+# -----------------------------------------------------------------------------
+# Create natural log returns
+# Formula: ln(price[t] / price[t-1])
+add_log_returns: true  # Creates: log_returns
+
+# -----------------------------------------------------------------------------
+# ROLLING STATISTICS (Disabled by default - expensive)
+# -----------------------------------------------------------------------------
+# Create rolling window statistics
+# WARNING: Computationally expensive, use data pipeline instead for production
+add_rolling_stats: false
+rolling_window: 20  # Window size for rolling calculations
+rolling_stats: ["mean", "std"]  # Options: "mean", "std", "min", "max"
+# If enabled, creates: rolling_mean_20, rolling_std_20, etc.
+
+# -----------------------------------------------------------------------------
+# MISSING VALUES HANDLING
+# -----------------------------------------------------------------------------
+# Handle NaN values in engineered features
+missing_values:
+  # Strategy for handling missing values
+  # Options: "forward_fill", "interpolate", "drop"
+  strategy: "forward_fill"
+
+  # Fill value for NaN at start of data (where no previous values exist)
+  initial_fill: 0.0

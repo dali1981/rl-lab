@@ -1,0 +1,12 @@
+# Price + Volume
+# OHLCV data
+
+input_features:
+  - "open"
+  - "high"
+  - "low"
+  - "close"
+  - "volume"
+
+validate_features: true
+log_all_features: true

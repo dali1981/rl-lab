@@ -1,0 +1,9 @@
+# Minimal Observation Space
+# Just price and volume
+
+input_features:
+  - "close"
+  - "volume"
+
+validate_features: true
+log_all_features: true

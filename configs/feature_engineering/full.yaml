@@ -1,0 +1,30 @@
+# Full Feature Engineering
+#
+# Creates all available features at runtime.
+# WARNING: This includes expensive rolling statistics - use for testing only.
+#
+# Creates:
+#   - returns_1, returns_5, returns_20
+#   - log_returns
+#   - rolling_mean_20, rolling_std_20, rolling_min_20, rolling_max_20
+#
+# Use for experimentation only - prefer data pipeline for production.
+
+enabled: true
+
+# Returns features
+add_returns: true
+return_periods: [1, 5, 20]
+
+# Log returns
+add_log_returns: true
+
+# Rolling statistics (EXPENSIVE - for testing only)
+add_rolling_stats: true
+rolling_window: 20
+rolling_stats: ["mean", "std", "min", "max"]
+
+# Missing values handling
+missing_values:
+  strategy: "forward_fill"
+  initial_fill: 0.0

@@ -1,0 +1,23 @@
+# Simple Returns Feature Engineering
+#
+# Creates just basic returns features for quick testing.
+#
+# Creates:
+#   - returns_1 (1-period returns)
+#
+# Minimal overhead, good for quick experiments.
+
+enabled: true
+
+# Add simple returns
+add_returns: true
+return_periods: [1]
+
+# Disable other features
+add_log_returns: false
+add_rolling_stats: false
+
+# Missing values handling
+missing_values:
+  strategy: "forward_fill"
+  initial_fill: 0.0

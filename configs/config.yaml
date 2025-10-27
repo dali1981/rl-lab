@@ -1,17 +1,26 @@
 defaults:
 - _self_
 - env: default
-- agent: ppo
-- features: fractional_indicators
+- agent: a2c
+- observation: default
+- feature_engineering: none
+
+# =============================================================================
+# EXPERIMENT CONFIGURATION
+# =============================================================================
 experiment:
   name: rl_trading
   run_name: ${agent.name}_${env.environment_params.reward_type}_${now:%Y%m%d_%H%M%S}
   seed: 42
-  device: cpu
+  device: cpu  # cpu or cuda
+
+# =============================================================================
+# DATA CONFIGURATION
+# =============================================================================
 data:
   train_data_path: ../tools/examples/btcusdt_fractional_indicators.parquet
-  val_split: 0.2  # Validation split ratio
-  test_split: 0.1  # Test split ratio
+  val_split: 0.2  # Validation split ratio (0.0-1.0)
+  test_split: 0.1  # Test split ratio (0.0-1.0)
   update_frequency: 1  # Data update frequency (for live trading)
 
 # Training Configuration
@@ -20,7 +29,7 @@ data:
 training:
   # Total training timesteps (environment steps, not episodes)
   # Default can be overridden by agent-specific configs (agent/*.yaml)
-  total_timesteps: 100_000  # PPO: 100k, A2C: 500k, DQN: 200k recommended
+  total_timesteps: 1_000_000  # PPO: 100k, A2C: 500k, DQN: 200k recommended
 
   # Evaluation during training
   eval_freq: 5_000  # Evaluate every N timesteps

@@ -1,0 +1,16 @@
+# Price + Engineered Returns Features
+# Use with feature_engineering=returns
+
+input_features:
+  - "close"
+  - "volume"
+  - "returns_1"
+  - "returns_5"
+  - "returns_20"
+  - "log_returns"
+
+validate_features: true
+log_all_features: true
+
+# NOTE: This config requires feature_engineering=returns
+# Run with: uv run python experiments/train.py observation=with_returns feature_engineering=returns

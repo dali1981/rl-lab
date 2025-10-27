@@ -1,0 +1,11 @@
+# Technical Indicators Only
+# Use z-scored technical indicators without raw price data
+
+input_features:
+  - "ratio_sma_5_close_zscore"
+  - "ratio_sma_20_close_zscore"
+  - "ratio_range_close_zscore"
+  - "fracdiff_0.4_zscore"
+
+validate_features: true
+log_all_features: true

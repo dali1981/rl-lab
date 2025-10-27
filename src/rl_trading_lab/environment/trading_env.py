@@ -50,11 +50,13 @@ class TradingEnv(gym.Env):
         randomize_start: bool = True,
         min_episode_length: int = 100,
         hold_closes_position: bool = False,
+        price_column: str = "close",
     ):
         super().__init__()
 
         # Store configuration
         self.df = df.copy()
+        self.price_column = price_column
         self.lookback_window = lookback_window
         self.initial_balance = initial_balance
         self.commission_rate = commission_rate
@@ -65,6 +67,13 @@ class TradingEnv(gym.Env):
         self.randomize_start = randomize_start
         self.min_episode_length = min_episode_length
         self.hold_closes_position = hold_closes_position
+
+        # Validate price column exists
+        if self.price_column not in self.df.columns:
+            raise ValueError(
+                f"Price column '{self.price_column}' not found in data. "
+                f"Available columns: {sorted(self.df.columns.tolist())}"
+            )
 
         # Prepare features
         if features_to_use:
@@ -104,6 +113,9 @@ class TradingEnv(gym.Env):
         self.balance = initial_balance
         self.position = Position()
 
+        # Trade tracking
+        self.num_trades = 0  # Count actual executed trades
+
         # History tracking
         self.history = {
             'balance': [],
@@ -132,6 +144,7 @@ class TradingEnv(gym.Env):
         # Reset account state
         self.balance = self.initial_balance
         self.position = Position()
+        self.num_trades = 0  # Reset trade counter
 
         # Reset step counter with optional randomization
         if self.randomize_start:
@@ -294,6 +307,10 @@ class TradingEnv(gym.Env):
             # Update balance
             self.balance -= commission
 
+            # Increment trade counter
+            self.num_trades += 1
+            logger.debug(f"Trade #{self.num_trades}: {'LONG' if signal > 0 else 'SHORT'} {abs(position_size):.4f} @ ${execution_price:.2f}")
+
     def _enter_position(self, signal: float, current_price: float):
         """
         Enter or modify position based on signal.
@@ -336,8 +353,21 @@ class TradingEnv(gym.Env):
         # Update balance
         self.balance += pnl - commission
 
+        # Log closing trade
+        logger.debug(f"Position closed: P&L=${pnl:.2f}, Commission=${commission:.2f}, Net=${pnl-commission:.2f}")
+
         # Reset position
         self.position = Position()
+
+    def close_all_positions(self):
+        """
+        Close all open positions at current price.
+        Should be called at episode end to realize all P&L.
+        """
+        if self.position.size != 0:
+            current_price = self._get_current_price()
+            logger.debug(f"Closing position at episode end: size={self.position.size:.4f}, price={current_price:.2f}")
+            self._close_position(current_price)
 
     def _get_portfolio_value(self) -> float:
         """Get total portfolio value (cash + position value)"""
@@ -351,8 +381,8 @@ class TradingEnv(gym.Env):
         return self.balance + unrealized_pnl
 
     def _get_current_price(self) -> float:
-        """Get current price from data"""
-        return self.df.iloc[self.current_step]['close']
+        """Get current price from data using configured price column"""
+        return self.df.iloc[self.current_step][self.price_column]
 
     def _calculate_reward(self, prev_value: float, current_value: float) -> float:
         """Calculate reward based on configured reward type"""
@@ -401,6 +431,7 @@ class TradingEnv(gym.Env):
             'portfolio_value': portfolio_value,
             'position': self.position.size,
             'total_return': (portfolio_value - self.initial_balance) / self.initial_balance,
+            'num_trades': self.num_trades,  # Add trade count to info
         }
 
         # Add performance metrics if we have history

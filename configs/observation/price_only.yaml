@@ -1,0 +1,11 @@
+# Price Only
+# Use OHLC price data only
+
+input_features:
+  - "open"
+  - "high"
+  - "low"
+  - "close"
+
+validate_features: true
+log_all_features: true

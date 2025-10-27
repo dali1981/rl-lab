@@ -1,0 +1,49 @@
+# =============================================================================
+# OBSERVATION SPACE CONFIGURATION (Default)
+# =============================================================================
+#
+# PURPOSE: Controls which features the RL agent observes (the agent's "brain")
+#
+# IMPORTANT:
+#   - These features MUST exist in your data file
+#   - The ENVIRONMENT gets the full dataframe (ALL columns)
+#   - The AGENT only sees these input_features
+#   - Environment uses env.price_column for trading (separate from observation)
+#
+# Example: Agent can observe only "volume" while environment trades using "close"
+#
+# Other configs available:
+#   observation=minimal           # Just close + volume (2 features)
+#   observation=price_only        # OHLC only (4 features)
+#   observation=with_volume       # OHLCV (5 features)
+#   observation=indicators_only   # Just technical indicators (4 features)
+#   observation=with_returns      # With returns (6 features, needs feature_engineering=returns)
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# AGENT OBSERVATION FEATURES
+# -----------------------------------------------------------------------------
+# List ALL features the agent should observe
+# These must exist in your data file (or be created by feature_engineering)
+input_features:
+#  - "close"
+#  - "volume"
+  - "ratio_sma_5_close_zscore"
+  - "ratio_sma_20_close_zscore"
+  - "ratio_range_close_zscore"
+  - "fracdiff_0.4_zscore"
+
+# -----------------------------------------------------------------------------
+# VALIDATION OPTIONS
+# -----------------------------------------------------------------------------
+# Validate that all input_features exist in the data
+# Set to false to skip validation (not recommended)
+validate_features: true
+
+# -----------------------------------------------------------------------------
+# LOGGING OPTIONS
+# -----------------------------------------------------------------------------
+# Log complete feature list at startup
+# Set to false to show only first 5 features
+log_all_features: true

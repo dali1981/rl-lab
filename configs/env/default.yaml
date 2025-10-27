@@ -1,14 +1,92 @@
-# Trading Environment Configuration
-# Override via CLI: python train.py env.environment_params.lookback_window=50
+# =============================================================================
+# TRADING ENVIRONMENT CONFIGURATION
+# =============================================================================
+#
+# PURPOSE: Controls what the environment needs to function and trading parameters
+#
+# IMPORTANT:
+#   - Environment gets the FULL dataframe (ALL columns)
+#   - Environment uses price_column for trade execution and P&L calculation
+#   - This is SEPARATE from what the agent observes (see observation config)
+#
+# Override via CLI:
+#   python train.py env.price_column=vwap
+#   python train.py env.environment_params.lookback_window=50
+#
+# =============================================================================
 
+# -----------------------------------------------------------------------------
+# DATA REQUIREMENTS
+# -----------------------------------------------------------------------------
+# Column to use for trade execution and P&L calculation
+# The environment will use this column to:
+#   - Execute buy/sell orders
+#   - Calculate position P&L
+#   - Calculate portfolio value
+# This is INDEPENDENT of what the agent observes
+price_column: "close"  # Options: "close", "vwap", "mid_price", etc.
+
+# Columns that MUST exist in the data for environment to function
+# Add any columns your environment needs (beyond observation features)
+required_columns:
+  - "close"      # Needed for default price_column
+  - "timestamp"  # Needed for time-based operations
+
+# -----------------------------------------------------------------------------
+# ENVIRONMENT PARAMETERS
+# -----------------------------------------------------------------------------
 environment_params:
+  # Lookback window for agent observation
+  # Agent sees: [features × lookback_window + position_info]
+  # Example: 6 features × 20 lookback = 120 + 4 position = 124 total obs size
   lookback_window: 20
+
+  # Initial balance for trading (in dollars)
   initial_balance: 10_000
+
+  # Maximum position size as percentage of balance (0.0-1.0)
+  # 0.95 = can use up to 95% of balance for single position
   max_position_pct: 0.95
-  commission_rate: 0.001
-  slippage_rate: 0.0005
-  reward_type: "sharpe"
+
+  # Commission rate per trade (as decimal)
+  # 0.001 = 0.1% commission
+  # 0.00 = no commission
+  commission_rate: 0.00
+
+  # Slippage rate per trade (as decimal)
+  # 0.0005 = 0.05% slippage
+  # 0.00 = no slippage
+  slippage_rate: 0.000
+
+  # Reward function type
+  # Options:
+  #   "returns" - Percentage returns per step (recommended)
+  #   "sharpe"  - Rolling Sharpe ratio (risk-adjusted)
+  #   "pnl"     - Absolute dollar P&L
+  #
+  # Reward Units:
+  #   | reward_type | Unit                    | Example  | Meaning                        |
+  #   |-------------|-------------------------|----------|--------------------------------|
+  #   | "returns"   | Decimal ratio (%)       | 0.001    | 0.1% return per step          |
+  #   | "sharpe"    | Unitless (Sharpe ratio) | -0.80    | Negative risk-adjusted returns |
+  #   | "pnl"       | Dollars                 | 5.50     | $5.50 profit per step         |
+  reward_type: "returns"
+
+  # Action space type
+  # true  = Discrete actions (0: Hold, 1: Buy, 2: Sell)
+  # false = Continuous actions (-1.0 to 1.0, where -1=full sell, 1=full buy)
   discrete_actions: true
+
+  # Randomize episode start position (for training diversity)
+  # true  = Start episodes at random points in data
+  # false = Always start at beginning (for consistent evaluation)
   randomize_start: true
+
+  # Minimum episode length (in steps)
+  # Ensures each episode has enough data for meaningful learning
   min_episode_length: 100
-  hold_closes_position: false
+
+  # Whether "hold" action closes positions
+  # true  = Hold action closes any open position (go flat)
+  # false = Hold action keeps current position (do nothing)
+  hold_closes_position: true

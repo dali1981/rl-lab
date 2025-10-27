@@ -15,9 +15,6 @@ from pathlib import Path
 import logging
 from datetime import datetime
 
-# Add src to path
-sys.path.append(str(Path(__file__).parent.parent))
-
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import mlflow
@@ -29,9 +26,10 @@ from rich.progress import track
 from rich.table import Table
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
-from src.environment.trading_env import TradingEnv
-from src.agents.sb3_agents import create_agent_from_config
-from src.utils.data_loader import TradingDataLoader
+from rl_trading_lab.config import RootConfig, load_config
+from rl_trading_lab.environment.trading_env import TradingEnv
+from rl_trading_lab.agents.sb3_agents import create_agent_from_config
+from rl_trading_lab.utils.data_processor import DataProcessor
 
 # Setup logging and console
 logging.basicConfig(level=logging.INFO)
@@ -39,66 +37,73 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-def setup_mlflow(cfg: DictConfig):
+def setup_mlflow(config: RootConfig):
     """Setup MLflow tracking"""
-    if not cfg.logging.mlflow.enabled:
+    if not config.logging.mlflow.enabled:
         return
 
     # Set tracking URI
-    mlflow.set_tracking_uri(cfg.logging.mlflow.tracking_uri)
+    mlflow.set_tracking_uri(config.logging.mlflow.tracking_uri)
 
     # Create or set experiment
-    mlflow.set_experiment(cfg.logging.mlflow.experiment_name)
+    mlflow.set_experiment(config.logging.mlflow.experiment_name)
 
     # Start run
-    mlflow.start_run(run_name=cfg.experiment.run_name)
+    mlflow.start_run(run_name=config.experiment.run_name)
 
     # Log parameters
     mlflow.log_params({
-        "agent": cfg.agent.name,
-        "environment.reward_type": cfg.env.environment_params.reward_type,
-        "environment.initial_balance": cfg.env.environment_params.initial_balance,
-        "environment.commission_rate": cfg.env.environment_params.commission_rate,
-        "environment.lookback_window": cfg.env.environment_params.lookback_window,
-        "training.total_timesteps": cfg.training.total_timesteps,
+        "agent": config.agent.name,
+        "environment.reward_type": config.env.environment_params.reward_type,
+        "environment.initial_balance": config.env.environment_params.initial_balance,
+        "environment.commission_rate": config.env.environment_params.commission_rate,
+        "environment.lookback_window": config.env.environment_params.lookback_window,
+        "training.total_timesteps": config.training.total_timesteps,
     })
 
     # Log hyperparameters
-    if "hyperparameters" in cfg.agent:
-        for key, value in cfg.agent.hyperparameters.items():
-            if not isinstance(value, (dict, list)):
-                mlflow.log_param(f"agent.{key}", value)
+    for key, value in config.agent.hyperparameters.model_dump().items():
+        if not isinstance(value, (dict, list)):
+            mlflow.log_param(f"agent.{key}", value)
 
     # Log full config as artifact for reproducibility
-    # This saves the complete resolved Hydra config (all defaults + overrides)
-    config_dict = OmegaConf.to_container(cfg, resolve=True)
+    config_dict = config.model_dump()
     mlflow.log_dict(config_dict, "config.yaml")
 
-    console.print(f"[green]✓[/green] MLflow tracking enabled: {cfg.logging.mlflow.tracking_uri}")
+    console.print(f"[green]✓[/green] MLflow tracking enabled: {config.logging.mlflow.tracking_uri}")
     console.print(f"[green]✓[/green] Full config logged to MLflow")
 
 
-def create_environments(cfg: DictConfig):
+def create_environments(config: RootConfig):
     """Create training and evaluation environments"""
     console.print("\n[bold]Loading Data...[/bold]")
 
-    # Initialize data loader
-    data_loader = TradingDataLoader(
-        data_path=cfg.data.train_data_path,
-        features_config=OmegaConf.to_container(cfg.features),
-        val_split=cfg.data.val_split,
-        test_split=cfg.data.test_split,
+    # Initialize data processor
+    data_processor = DataProcessor(
+        data_path=config.data.train_data_path,
+        observation_config=config.observation,
+        feature_engineering_config=config.feature_engineering,
+        val_split=config.data.val_split,
+        test_split=config.data.test_split,
     )
 
-    # Load and prepare data
-    train_df, val_df, test_df, feature_names = data_loader.load_and_prepare()
+    # Load and process data
+    train_df, val_df, test_df, observation_features = data_processor.process()
+
+    # Validate required columns exist
+    for col in config.env.required_columns:
+        if col not in train_df.columns:
+            raise ValueError(
+                f"Required column '{col}' not found in data. "
+                f"Available columns: {sorted(train_df.columns.tolist())}"
+            )
 
     console.print(f"[green]✓[/green] Loaded data: "
                  f"Train={len(train_df)} bars, Val={len(val_df)} bars, Test={len(test_df)} bars")
-    console.print(f"[green]✓[/green] Features: {len(feature_names)} selected")
+    console.print(f"[green]✓[/green] Observation features: {len(observation_features)} selected")
 
     # Extract environment parameters from config
-    env_params = cfg.env.environment_params
+    env_params = config.env.environment_params
 
     # Create training environment with randomization enabled
     train_env = TradingEnv(
@@ -110,10 +115,11 @@ def create_environments(cfg: DictConfig):
         reward_type=env_params.reward_type,
         discrete_actions=env_params.discrete_actions,
         max_position_pct=env_params.max_position_pct,
-        features_to_use=feature_names,
+        features_to_use=observation_features,
         randomize_start=env_params.randomize_start,
         min_episode_length=env_params.min_episode_length,
         hold_closes_position=env_params.hold_closes_position,
+        price_column=config.env.price_column,
     )
 
     # Create evaluation environment (no randomization for consistency)
@@ -126,10 +132,11 @@ def create_environments(cfg: DictConfig):
         reward_type=env_params.reward_type,
         discrete_actions=env_params.discrete_actions,
         max_position_pct=env_params.max_position_pct,
-        features_to_use=feature_names,
+        features_to_use=observation_features,
         randomize_start=False,  # Disable for consistent evaluation
         min_episode_length=env_params.min_episode_length,
         hold_closes_position=env_params.hold_closes_position,
+        price_column=config.env.price_column,
     )
 
     # Create test environment (no randomization for consistent evaluation)
@@ -142,10 +149,11 @@ def create_environments(cfg: DictConfig):
         reward_type=env_params.reward_type,
         discrete_actions=env_params.discrete_actions,
         max_position_pct=env_params.max_position_pct,
-        features_to_use=feature_names,
+        features_to_use=observation_features,
         randomize_start=False,  # Disable for consistent evaluation
         min_episode_length=env_params.min_episode_length,
         hold_closes_position=env_params.hold_closes_position,
+        price_column=config.env.price_column,
     )
 
     return train_env, eval_env, test_env
@@ -195,24 +203,24 @@ def wrap_test_env_for_evaluation(test_env, agent):
     return test_vec_env
 
 
-def train_agent(cfg: DictConfig, train_env, eval_env):
+def train_agent(config: RootConfig, train_env, eval_env):
     """Train the RL agent"""
-    console.print(f"\n[bold]Training {cfg.agent.name} Agent...[/bold]")
+    console.print(f"\n[bold]Training {config.agent.name} Agent...[/bold]")
 
     # Create agent
     agent = create_agent_from_config(
-        config=OmegaConf.to_container(cfg),
+        config=config,
         env=train_env,
         eval_env=eval_env,
     )
 
     # Train
     metrics = agent.train(
-        total_timesteps=cfg.training.total_timesteps,
-        eval_freq=cfg.training.eval_freq,
-        n_eval_episodes=cfg.training.n_eval_episodes,
-        save_freq=cfg.training.save_freq,
-        progress_bar=cfg.logging.console.progress_bar,
+        total_timesteps=config.training.total_timesteps,
+        eval_freq=config.training.eval_freq,
+        n_eval_episodes=config.training.n_eval_episodes,
+        save_freq=config.training.save_freq,
+        progress_bar=config.logging.console.progress_bar,
     )
 
     console.print(f"[green]✓[/green] Training completed")
@@ -315,9 +323,16 @@ def run_backtest(agent, test_env):
 
         step_count += 1
 
+    # Close any remaining open positions to realize all P&L
+    unwrapped_env = test_env_wrapped.venv.envs[0]
+    unwrapped_env.close_all_positions()
+
+    # Get final portfolio value after closing positions
+    final_portfolio_value = unwrapped_env._get_portfolio_value()
+
     # Calculate final metrics
     initial_balance = test_env_wrapped.venv.envs[0].initial_balance
-    final_return = (balances[-1] - initial_balance) / initial_balance
+    final_return = (final_portfolio_value - initial_balance) / initial_balance
 
     # FIXED: Calculate Sharpe from actual returns, not from Sharpe rewards!
     # The rewards are Sharpe approximations, we need to use actual portfolio returns
@@ -327,8 +342,27 @@ def run_backtest(agent, test_env):
     else:
         sharpe = 0.0
 
-    # Trading frequency analysis
-    total_trades = len([a for a in actions if a != 0])
+    # Trading frequency analysis - count ACTUAL trades, not action signals
+    # A trade occurs when position changes from flat, or reverses direction
+    total_trades = 0
+    for i in range(len(positions)):
+        if i == 0:
+            # First step: trade if we open a position
+            if abs(positions[i]) > 0.001:
+                total_trades += 1
+        else:
+            # Subsequent steps: trade if position sign changes or goes from 0 to non-zero
+            prev_pos = positions[i-1]
+            curr_pos = positions[i]
+
+            # Check if we went from flat to positioned
+            if abs(prev_pos) < 0.001 and abs(curr_pos) > 0.001:
+                total_trades += 1
+            # Check if we reversed direction (long to short or short to long)
+            elif abs(prev_pos) > 0.001 and abs(curr_pos) > 0.001:
+                if np.sign(prev_pos) != np.sign(curr_pos):
+                    total_trades += 1
+
     trade_frequency = total_trades / len(actions) if len(actions) > 0 else 0
 
     console.print(f"[green]✓[/green] Backtest completed")
@@ -370,20 +404,23 @@ def run_backtest(agent, test_env):
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig):
     """Main training pipeline"""
+    # Load and validate config using Pydantic
+    config = load_config(cfg)
+
     console.print("[bold blue]RL Trading Lab[/bold blue]")
-    console.print(f"Agent: [cyan]{cfg.agent.name}[/cyan]")
-    console.print(f"Environment: [cyan]{cfg.env.environment_params.reward_type}[/cyan] reward")
-    console.print(f"Device: [cyan]{cfg.experiment.device}[/cyan]\n")
+    console.print(f"Agent: [cyan]{config.agent.name}[/cyan]")
+    console.print(f"Environment: [cyan]{config.env.environment_params.reward_type}[/cyan] reward")
+    console.print(f"Device: [cyan]{config.experiment.device}[/cyan]\n")
 
     # Setup MLflow
-    setup_mlflow(cfg)
+    setup_mlflow(config)
 
     try:
         # Create environments
-        train_env, eval_env, test_env = create_environments(cfg)
+        train_env, eval_env, test_env = create_environments(config)
 
         # Train agent
-        agent, train_metrics = train_agent(cfg, train_env, eval_env)
+        agent, train_metrics = train_agent(config, train_env, eval_env)
 
         # Evaluate on test set
         test_metrics = evaluate_final_performance(agent, test_env)
