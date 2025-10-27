@@ -45,12 +45,15 @@ mlartifacts/
 *.log
 logs/
 
-# Models & Checkpoints
+# Models & Checkpoints (saved model files, not source code)
 checkpoints/
-models/
+saved_models/
 *.pkl
 *.pth
 *.pt
+*.zip
+# Don't ignore source code in src/*/models/
+!src/*/models/
 
 # Data (large files)
 *.parquet

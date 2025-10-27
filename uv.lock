@@ -3945,6 +3945,7 @@ dependencies = [
     { name = "hydra-core" },
     { name = "matplotlib" },
     { name = "mlflow" },
+    { name = "notebook" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.3.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "optuna" },
@@ -3980,6 +3981,7 @@ ray = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "jupyter" },
     { name = "pytest" },
 ]
 
@@ -3995,6 +3997,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.7.0" },
     { name = "mlflow", specifier = ">=2.8.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.5.0" },
+    { name = "notebook", specifier = ">=7.4.7" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "optuna", specifier = ">=3.4.0" },
     { name = "pandas", specifier = ">=2.1.0" },
@@ -4017,7 +4020,10 @@ requires-dist = [
 provides-extras = ["dev", "ray"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.4.2" }]
+dev = [
+    { name = "jupyter", specifier = ">=1.1.1" },
+    { name = "pytest", specifier = ">=8.4.2" },
+]
 
 [[package]]
 name = "rpds-py"

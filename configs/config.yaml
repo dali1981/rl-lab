@@ -1,7 +1,7 @@
 defaults:
 - _self_
 - env: default
-- agent: a2c
+- agent: dqn
 - observation: default
 - feature_engineering: none
 

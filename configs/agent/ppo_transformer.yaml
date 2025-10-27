@@ -1,0 +1,79 @@
+# PPO Agent with Transformer Policy Configuration
+
+name: "PPO_Transformer"
+algorithm: "stable_baselines3.PPO"
+
+# PPO specific hyperparameters
+hyperparameters:
+  # Learning
+  learning_rate: 3.0e-4  # Lower LR for transformer (more parameters)
+  n_steps: 2048  # Number of steps per environment per update
+  batch_size: 64  # Minibatch size
+  n_epochs: 10  # Number of epochs when optimizing
+
+  # Advantage estimation
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE lambda
+
+  # PPO clipping
+  clip_range: 0.2  # PPO clip parameter
+  clip_range_vf: null  # Clip range for value function (null=no clipping)
+
+  # Regularization
+  ent_coef: 0.01  # Entropy coefficient (lower for transformer)
+  vf_coef: 0.5  # Value function coefficient
+  max_grad_norm: 0.5  # Max gradient norm (important for transformer stability)
+
+  # Network architecture - Transformer Policy
+  policy: "TransformerPolicy"
+  policy_kwargs:
+    # Network architecture for policy and value heads (after transformer)
+    net_arch:
+      pi: [128, 64]  # Policy head: transformer output -> 128 -> 64 -> actions
+      vf: [128, 64]  # Value head: transformer output -> 128 -> 64 -> value
+
+    activation_fn: "ReLU"
+    normalize_images: false
+
+    # Transformer feature extractor configuration
+    features_extractor_class: rl_trading_lab.models.TransformerFeatureExtractor
+    features_extractor_kwargs:
+      # Observation parameters (must match environment)
+      lookback_window: 20  # Number of timesteps in sequence
+      n_features: 4  # Number of features per timestep (from observation config)
+
+      # Transformer architecture
+      d_model: 128  # Transformer hidden dimension
+      nhead: 4  # Number of attention heads (must divide d_model)
+      num_encoder_layers: 2  # Number of transformer encoder layers
+      dim_feedforward: 256  # Feedforward network dimension
+      dropout: 0.1  # Dropout rate for regularization
+
+      # Sequence aggregation method
+      aggregation: "mean"  # Options: "mean", "last", "cls"
+
+  # Other settings
+  normalize_advantage: true
+  use_sde: false  # State Dependent Exploration
+  sde_sample_freq: -1
+
+# Training settings specific to this agent
+verbose: 1
+tensorboard_log: "./logs/ppo_transformer"
+
+# Recommended training timesteps for PPO with Transformer
+# Transformers may need more training due to increased capacity
+training:
+  total_timesteps: 1_000_000  # May need longer for transformer to converge
+  eval_freq: 5_000
+  save_freq: 10_000
+
+# Notes:
+# - Ensure n_features matches the number of features in your observation config
+# - d_model should be divisible by nhead
+# - Larger transformers (more layers, larger d_model) may need:
+#   * Lower learning rate (e.g., 1e-4)
+#   * More training timesteps
+#   * Gradient clipping (max_grad_norm)
+# - The transformer processes sequences of shape (lookback_window, n_features)
+# - Position information (4 dims) is added as a separate token after the sequence

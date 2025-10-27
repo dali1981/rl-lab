@@ -28,6 +28,7 @@ dependencies = [
     "rich>=13.6.0", # Pretty terminal output
     "tensorboard>=2.20.0",
     "pydantic>=2.12.3",
+    "notebook>=7.4.7",
 ]
 
 [project.optional-dependencies]
@@ -68,5 +69,6 @@ warn_unused_configs = true
 
 [dependency-groups]
 dev = [
+    "jupyter>=1.1.1",
     "pytest>=8.4.2",
 ]

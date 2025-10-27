@@ -7,6 +7,7 @@ import os
 from typing import Dict, Any, Optional, Type, Union
 from pathlib import Path
 import logging
+import importlib
 
 import gymnasium as gym
 import numpy as np
@@ -28,6 +29,15 @@ from rl_trading_lab.config import RootConfig
 from rl_trading_lab.config.agent import AgentConfig
 from rl_trading_lab.utils.mlflow_logger import MLflowOutputFormat
 from rl_trading_lab.utils.callbacks import MLflowCallback, TradingMetricsCallback
+from rl_trading_lab.utils.custom_callbacks import CheckpointManagerCallback, BestModelCallback
+from rl_trading_lab.utils.checkpoint_manager import CheckpointManager
+
+# Import custom policies
+try:
+    from rl_trading_lab.models import TransformerActorCriticPolicy
+except ImportError:
+    logger.warning("Could not import TransformerActorCriticPolicy. Transformer policy will not be available.")
+    TransformerActorCriticPolicy = None
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +48,11 @@ ALGORITHMS = {
     "A2C": A2C,
     "DQN": DQN,
     "SAC": SAC,
+}
+
+# Custom policy mapping
+CUSTOM_POLICIES = {
+    "TransformerPolicy": TransformerActorCriticPolicy,
 }
 
 
@@ -137,9 +152,32 @@ class TradingAgentWrapper:
                 activation_name = policy_kwargs["activation_fn"]
                 policy_kwargs["activation_fn"] = getattr(nn, activation_name)
 
+            # Handle features_extractor_class if it's a string reference
+            if "features_extractor_class" in policy_kwargs:
+                extractor_class = policy_kwargs["features_extractor_class"]
+                if isinstance(extractor_class, str):
+                    # Convert string reference to actual class
+                    # e.g., "rl_trading_lab.models.TransformerFeatureExtractor"
+                    try:
+                        module_path, class_name = extractor_class.rsplit(".", 1)
+                        module = importlib.import_module(module_path)
+                        policy_kwargs["features_extractor_class"] = getattr(module, class_name)
+                        logger.info(f"Loaded custom feature extractor: {class_name}")
+                    except (ValueError, ImportError, AttributeError) as e:
+                        logger.error(f"Failed to import features_extractor_class '{extractor_class}': {e}")
+                        raise
+
+        # Get policy (can be string like "MlpPolicy" or "TransformerPolicy")
+        policy = hyperparams.pop("policy", "MlpPolicy")
+
+        # Map custom policy strings to classes
+        if isinstance(policy, str) and policy in CUSTOM_POLICIES:
+            policy = CUSTOM_POLICIES[policy]
+            logger.info(f"Using custom policy: {policy.__name__}")
+
         # Create agent
         agent = self.algo_class(
-            policy=hyperparams.pop("policy", "MlpPolicy"),
+            policy=policy,
             env=self.env,
             policy_kwargs=policy_kwargs,
             device=self.device,
@@ -213,8 +251,9 @@ class TradingAgentWrapper:
         callback_list = []
 
         # Add evaluation callback if eval environment provided
+        # Use BestModelCallback to save VecNormalize stats with best model
         if self.eval_env and eval_freq:
-            eval_callback = EvalCallback(
+            eval_callback = BestModelCallback(
                 self.eval_env,
                 best_model_save_path=str(self.save_path / "best_model"),
                 log_path=str(self.save_path / "eval_logs"),
@@ -222,17 +261,22 @@ class TradingAgentWrapper:
                 n_eval_episodes=n_eval_episodes,
                 deterministic=True,
                 render=False,
+                verbose=self.config.verbose,
+                metadata={'agent_config': self.config.name},
             )
             callback_list.append(eval_callback)
 
-        # Add checkpoint callback
+        # Add checkpoint callback with metadata
+        # Use CheckpointManagerCallback to save metadata with each checkpoint
         if save_freq:
-            checkpoint_callback = CheckpointCallback(
+            checkpoint_callback = CheckpointManagerCallback(
                 save_freq=save_freq,
                 save_path=str(self.save_path / "checkpoints"),
                 name_prefix="rl_model",
                 save_replay_buffer=True,
                 save_vecnormalize=True,
+                verbose=self.config.verbose,
+                metadata={'agent_config': self.config.name},
             )
             callback_list.append(checkpoint_callback)
 
@@ -352,9 +396,20 @@ class TradingAgentWrapper:
         logger.info(f"Model saved to {path}")
 
     def load(self, path: Union[str, Path]):
-        """Load a saved model"""
+        """Load a saved model with CheckpointManager"""
         path = Path(path)
-        self.agent = self.algo_class.load(str(path), env=self.env)
+
+        # Use CheckpointManager for robust loading
+        checkpoint_manager = CheckpointManager()
+
+        # Load model and VecNormalize
+        # Note: This replaces self.env with properly configured VecNormalize
+        self.agent, self.env = checkpoint_manager.load_checkpoint(
+            path,
+            self.env.venv.envs[0] if hasattr(self.env, 'venv') else self.env,
+            verbose=1
+        )
+
         logger.info(f"Model loaded from {path}")
 
     @classmethod

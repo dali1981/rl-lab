@@ -12,6 +12,13 @@ class PolicyKwargs(BaseModel):
     activation_fn: str
     normalize_images: bool = False
 
+    # Optional fields for custom feature extractors (e.g., Transformer)
+    features_extractor_class: Optional[str] = None
+    features_extractor_kwargs: Optional[Dict[str, Any]] = None
+
+    class Config:
+        extra = "allow"  # Allow additional fields for flexibility
+
 
 class BaseAgentConfig(BaseModel):
     """Base configuration shared by all agents."""
@@ -109,6 +116,13 @@ class DQNPolicyKwargs(BaseModel):
 
     net_arch: List[int]
     activation_fn: str
+
+    # Optional fields for custom feature extractors (e.g., Transformer)
+    features_extractor_class: Optional[str] = None
+    features_extractor_kwargs: Optional[Dict[str, Any]] = None
+
+    class Config:
+        extra = "allow"  # Allow additional fields for flexibility
 
 
 class DQNHyperparameters(BaseModel):

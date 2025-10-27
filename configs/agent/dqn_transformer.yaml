@@ -1,0 +1,76 @@
+# DQN Agent with Transformer Policy Configuration
+# Note: name must be "DQN" for Pydantic validation (policy type is specified in policy_kwargs)
+# Note: DQN doesn't use ActorCriticPolicy, so transformer integration is different
+
+name: "DQN"
+algorithm: "stable_baselines3.DQN"
+
+hyperparameters:
+  # Learning
+  learning_rate: 1.0e-4  # Lower LR for transformer
+  buffer_size: 100_000  # Replay buffer size
+  learning_starts: 1_000  # Start training after N steps
+  batch_size: 32
+
+  # Discount
+  gamma: 0.99
+
+  # Exploration
+  exploration_fraction: 0.1  # Fraction of training for exploration
+  exploration_initial_eps: 1.0  # Initial epsilon
+  exploration_final_eps: 0.05  # Final epsilon
+
+  # Target network
+  target_update_interval: 1_000  # Update target network every N steps
+  tau: 1.0  # Polyak update coefficient (1.0 = hard update)
+
+  # Training
+  train_freq: 4  # Train every N steps
+  gradient_steps: 1  # Gradient steps per update
+
+  # Network architecture
+  # Note: DQN uses QNetwork, not ActorCriticPolicy
+  # TransformerPolicy is designed for ActorCritic, so we use MlpPolicy with custom features extractor
+  policy: "MlpPolicy"
+  policy_kwargs:
+    net_arch: [128, 64]  # Q-network head layers (after transformer)
+    activation_fn: "ReLU"
+
+    # Transformer feature extractor configuration
+    features_extractor_class: rl_trading_lab.models.TransformerFeatureExtractor
+    features_extractor_kwargs:
+      # Observation parameters (must match environment)
+      lookback_window: 20  # Number of timesteps in sequence
+      n_features: 4  # Number of features per timestep (from observation config)
+
+      # Transformer architecture
+      d_model: 128  # Transformer hidden dimension
+      nhead: 4  # Number of attention heads (must divide d_model)
+      num_encoder_layers: 2  # Number of transformer encoder layers
+      dim_feedforward: 256  # Feedforward network dimension
+      dropout: 0.1  # Dropout rate for regularization
+
+      # Sequence aggregation method
+      aggregation: "mean"  # Options: "mean", "last", "cls"
+
+  # Double DQN
+  optimize_memory_usage: false
+  max_grad_norm: 10
+
+verbose: 1
+tensorboard_log: "./logs/dqn_transformer"
+
+# Recommended training timesteps for DQN with Transformer
+# DQN needs time for replay buffer filling and exploration
+training:
+  total_timesteps: 200_000  # May need longer for transformer to converge
+  eval_freq: 10_000
+  save_freq: 20_000
+
+# Notes:
+# - DQN uses discrete action spaces only
+# - Transformer processes state sequences for Q-value estimation
+# - Replay buffer helps with sample efficiency
+# - Ensure env.discrete_actions = true in environment config
+# - Exploration strategy is epsilon-greedy
+# - Ensure n_features matches your observation config
