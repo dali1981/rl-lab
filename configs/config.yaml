@@ -1,0 +1,54 @@
+defaults:
+- _self_
+- env: default
+- agent: ppo
+- features: fractional_indicators
+experiment:
+  name: rl_trading
+  run_name: ${agent.name}_${env.reward_type}_${now:%Y%m%d_%H%M%S}
+  seed: 42
+  device: cpu
+data:
+  train_data_path: ../tools/examples/btcusdt_fractional_indicators.parquet
+  val_split: 0.2
+  test_split: 0.1
+  lookback_bars: 20
+  update_frequency: 1
+
+# Training Configuration
+# Note: Each agent config has recommended values that can override these
+# Override via CLI: python train.py training.total_timesteps=1000000
+training:
+  # Total training timesteps (environment steps, not episodes)
+  # Default can be overridden by agent-specific configs (agent/*.yaml)
+  total_timesteps: 100_000  # PPO: 100k, A2C: 500k, DQN: 200k recommended
+
+  # Evaluation during training
+  eval_freq: 5_000  # Evaluate every N timesteps
+  n_eval_episodes: 10  # Number of episodes for evaluation
+
+  # Checkpointing
+  save_freq: 10_000  # Save model every N timesteps
+  save_path: checkpoints/${experiment.run_name}
+
+  # Early stopping (experimental)
+  early_stopping: true
+  patience: 10  # Stop if no improvement for N evaluations
+  min_improvement: 0.001  # Minimum improvement threshold
+logging:
+  mlflow:
+    enabled: true
+    tracking_uri: file:./mlruns
+    experiment_name: ${experiment.name}
+  tensorboard:
+    enabled: false
+    log_dir: logs/${experiment.run_name}
+  console:
+    verbose: true
+    progress_bar: true
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}

@@ -1,0 +1,57 @@
+# Feature configuration for fractional indicators
+
+# Indicator columns to use from the data
+price_features:
+  - "open"
+  - "high"
+  - "low"
+  - "close"
+  - "volume"
+
+technical_indicators:
+  # Raw indicators
+  - "ratio_sma_5_close"
+  - "ratio_sma_20_close"
+  - "ratio_range_close"
+  - "fracdiff_0.4"
+
+# Whether to use z-score normalized versions
+use_zscore: true
+zscore_indicators:
+  - "ratio_sma_5_close_zscore"
+  - "ratio_sma_20_close_zscore"
+  - "ratio_range_close_zscore"
+  - "fracdiff_0.4_zscore"
+
+# Feature engineering
+feature_engineering:
+  # Add returns
+  add_returns: true
+  return_periods: [1, 5, 20]
+
+  # Add log returns
+  add_log_returns: true
+
+  # Rolling statistics
+  add_rolling_stats: true
+  rolling_window: 20
+  rolling_stats: ["mean", "std", "min", "max"]
+
+  # Position features (added by environment)
+  add_position_features: true
+  position_features:
+    - "current_position"  # -1, 0, 1
+    - "position_duration"  # Bars held
+    - "unrealized_pnl"
+    - "realized_pnl"
+
+# Feature scaling
+scaling:
+  method: "robust"  # standard, minmax, robust, none
+  clip_range: [-5, 5]  # Clip extreme values
+
+# Handling missing values
+missing_values:
+  strategy: "forward_fill"  # forward_fill, interpolate, drop
+  # For z-scores at the beginning (insufficient lookback)
+  initial_zscore_fill: 0.0

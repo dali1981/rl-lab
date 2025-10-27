@@ -1,0 +1,66 @@
+[project]
+name = "rl-trading-lab"
+version = "0.1.0"
+description = "RL Trading Lab - Hybrid Kedro data pipeline with RL experimentation"
+requires-python = ">=3.10"
+dependencies = [
+    # RL Libraries
+    "stable-baselines3>=2.1.0",
+    "gymnasium>=0.29.0",
+    "shimmy>=1.3.0", # Compatibility layer for gym
+    # Configuration & Experiment Tracking
+    "hydra-core>=1.3.0",
+    "mlflow>=2.8.0",
+    "optuna>=3.4.0", # Hyperparameter optimization
+    # Data & Computation
+    "numpy>=1.24.0",
+    "pandas>=2.1.0",
+    "polars>=0.19.0",
+    "pyarrow>=14.0.0",
+    # Visualization
+    "matplotlib>=3.7.0",
+    "seaborn>=0.13.0",
+    "plotly>=5.17.0",
+    # Utilities
+    "pyyaml>=6.0",
+    "tqdm>=4.66.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.6.0", # Pretty terminal output
+    "tensorboard>=2.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.9.0",
+    "isort>=5.12.0",
+    "flake8>=6.1.0",
+    "mypy>=1.5.0",
+    "ipykernel>=6.25.0",
+    "jupyter>=1.0.0",
+]
+
+ray = [
+    "ray[rllib]>=2.7.0",  # For distributed training later
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true

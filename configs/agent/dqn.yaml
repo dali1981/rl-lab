@@ -1,0 +1,47 @@
+# DQN Agent Configuration
+
+name: "DQN"
+algorithm: "stable_baselines3.DQN"
+
+hyperparameters:
+  # Learning
+  learning_rate: 1.0e-4
+  buffer_size: 100_000  # Replay buffer size
+  learning_starts: 1_000  # Start training after N steps
+  batch_size: 32
+
+  # Discount
+  gamma: 0.99
+
+  # Exploration
+  exploration_fraction: 0.1  # Fraction of training for exploration
+  exploration_initial_eps: 1.0  # Initial epsilon
+  exploration_final_eps: 0.05  # Final epsilon
+
+  # Target network
+  target_update_interval: 1_000  # Update target network every N steps
+  tau: 1.0  # Polyak update coefficient (1.0 = hard update)
+
+  # Training
+  train_freq: 4  # Train every N steps
+  gradient_steps: 1  # Gradient steps per update
+
+  # Network architecture
+  policy: "MlpPolicy"
+  policy_kwargs:
+    net_arch: [256, 256]  # Q-network architecture
+    activation_fn: "ReLU"
+
+  # Double DQN
+  optimize_memory_usage: false
+  max_grad_norm: 10
+
+verbose: 1
+tensorboard_log: "./logs/dqn"
+
+# Recommended training timesteps for DQN
+# DQN needs time for replay buffer filling and exploration
+training:
+  total_timesteps: 200_000  # Recommended: 200k-1M depending on complexity
+  eval_freq: 10_000
+  save_freq: 20_000

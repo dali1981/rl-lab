@@ -1,0 +1,51 @@
+# PPO Agent Configuration
+
+name: "PPO"
+algorithm: "stable_baselines3.PPO"
+
+# PPO specific hyperparameters
+hyperparameters:
+  # Learning
+  learning_rate: 3.0e-4
+  n_steps: 2048  # Number of steps per environment per update
+  batch_size: 64  # Minibatch size
+  n_epochs: 10  # Number of epochs when optimizing
+
+  # Advantage estimation
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE lambda
+
+  # PPO clipping
+  clip_range: 0.2  # PPO clip parameter
+  clip_range_vf: null  # Clip range for value function (null=no clipping)
+
+  # Regularization
+#  ent_coef: 0.01  # Entropy coefficient
+  ent_coef: 0.1  # Entropy coefficient
+  vf_coef: 0.5  # Value function coefficient
+  max_grad_norm: 0.5  # Max gradient norm
+
+  # Network architecture
+  policy: "MlpPolicy"
+  policy_kwargs:
+    net_arch:
+      pi: [256, 256]  # Actor network
+      vf: [256, 256]  # Critic network
+    activation_fn: "ReLU"
+    normalize_images: false
+
+  # Other settings
+  normalize_advantage: true
+  use_sde: false  # State Dependent Exploration
+  sde_sample_freq: -1
+
+# Training settings specific to this agent
+verbose: 1
+tensorboard_log: "./logs/ppo"
+
+# Recommended training timesteps for PPO
+# PPO is sample-efficient for on-policy algorithms
+training:
+  total_timesteps: 100_000  # Recommended: 100k-1M depending on complexity
+  eval_freq: 5_000
+  save_freq: 10_000

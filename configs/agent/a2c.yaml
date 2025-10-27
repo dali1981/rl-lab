@@ -1,0 +1,41 @@
+# A2C Agent Configuration
+
+name: "A2C"
+algorithm: "stable_baselines3.A2C"
+
+hyperparameters:
+  # Learning
+  learning_rate: 7.0e-4
+  n_steps: 5  # Number of steps per environment per update
+
+  # Discount and advantage
+  gamma: 0.99
+  gae_lambda: 1.0  # GAE lambda (1.0 = no GAE, standard advantage)
+
+  # Regularization
+  ent_coef: 0.01  # Entropy coefficient
+  vf_coef: 0.5  # Value function coefficient
+  max_grad_norm: 0.5
+
+  # Network architecture
+  policy: "MlpPolicy"
+  policy_kwargs:
+    net_arch:
+      pi: [256, 256]  # Actor network
+      vf: [256, 256]  # Critic network
+    activation_fn: "ReLU"
+
+  # RMS Prop optimizer
+  rms_prop_eps: 1.0e-5
+  use_rms_prop: true
+  normalize_advantage: false
+
+verbose: 1
+tensorboard_log: "./logs/a2c"
+
+# Recommended training timesteps for A2C
+# A2C typically needs more steps than PPO (less sample efficient)
+training:
+  total_timesteps: 500_000  # Recommended: 500k-10M depending on complexity
+  eval_freq: 10_000
+  save_freq: 50_000
