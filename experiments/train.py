@@ -279,16 +279,23 @@ def run_backtest(agent, test_env):
         # Get action from agent
         action, _ = agent.predict(obs, deterministic=True)
 
-        # Step environment
-        obs, reward, done, truncated, info = test_env_wrapped.step(action)
+        # Step environment (VecNormalize returns 4 values: obs, reward, done, info)
+        step_result = test_env_wrapped.step(action)
+        if len(step_result) == 4:
+            # Old gym API (VecNormalize)
+            obs, reward, done, info = step_result
+            truncated = False  # Not available in old API
+        else:
+            # New gymnasium API
+            obs, reward, done, truncated, info = step_result
 
         # Extract info from vectorized environment
         if isinstance(info, list):
             info = info[0]
         if isinstance(done, np.ndarray):
             done = done[0]
-        if isinstance(truncated, np.ndarray):
-            truncated = truncated[0]
+        if isinstance(truncated, (np.ndarray, bool)):
+            truncated = truncated[0] if isinstance(truncated, np.ndarray) else truncated
 
         # Collect data
         actions.append(action)
