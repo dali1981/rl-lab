@@ -141,7 +141,8 @@ class TradingAgentWrapper:
     def _create_agent(self) -> BaseAlgorithm:
         """Create the SB3 agent"""
         # Get hyperparameters as dict
-        hyperparams = self.config.hyperparameters.model_dump()
+        # Exclude None values to avoid passing them to SB3 (which causes issues with DQN)
+        hyperparams = self.config.hyperparameters.model_dump(exclude_none=True)
 
         # Handle policy kwargs
         policy_kwargs = hyperparams.pop("policy_kwargs", None)
