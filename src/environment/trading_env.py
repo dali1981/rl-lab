@@ -44,6 +44,9 @@ class TradingEnv(gym.Env):
         discrete_actions: bool = True,
         max_position_pct: float = 0.95,
         features_to_use: Optional[list] = None,
+        randomize_start: bool = True,
+        min_episode_length: int = 100,
+        hold_closes_position: bool = False,
     ):
         super().__init__()
 
@@ -56,6 +59,9 @@ class TradingEnv(gym.Env):
         self.reward_type = reward_type
         self.discrete_actions = discrete_actions
         self.max_position_pct = max_position_pct
+        self.randomize_start = randomize_start
+        self.min_episode_length = min_episode_length
+        self.hold_closes_position = hold_closes_position
 
         # Prepare features
         if features_to_use:
@@ -117,8 +123,17 @@ class TradingEnv(gym.Env):
         self.balance = self.initial_balance
         self.position = Position()
 
-        # Reset step counter
-        self.current_step = self.start_step
+        # Reset step counter with optional randomization
+        if self.randomize_start:
+            # Randomize starting point to train on diverse market conditions
+            max_start = self.max_steps - self.min_episode_length
+            if max_start > self.start_step:
+                self.current_step = self.np_random.integers(self.start_step, max_start)
+            else:
+                self.current_step = self.start_step
+        else:
+            # Always start from beginning (original behavior)
+            self.current_step = self.start_step
 
         # Clear history
         for key in self.history:
@@ -201,6 +216,9 @@ class TradingEnv(gym.Env):
         if self.discrete_actions:
             # Discrete actions: 0=Hold, 1=Buy, 2=Sell
             if action == 0:  # Hold
+                # Configurable behavior: close position or do nothing
+                if self.hold_closes_position and self.position.size != 0:
+                    self._close_position(current_price)
                 return
             elif action == 1:  # Buy
                 self._enter_position(1.0, current_price)
@@ -211,33 +229,75 @@ class TradingEnv(gym.Env):
             if abs(action) > 0.1:  # Threshold to avoid tiny trades
                 self._enter_position(action, current_price)
 
+    def _should_close_position(self, signal: float) -> bool:
+        """
+        Determine if current position should be closed.
+
+        Args:
+            signal: Trading signal (-1, 0, +1)
+
+        Returns:
+            True if position should be closed
+        """
+        # No position to close
+        if self.position.size == 0:
+            return False
+
+        # Close if taking opposite direction
+        if np.sign(signal) != np.sign(self.position.size):
+            return True
+
+        return False
+
+    def _execute_open(self, signal: float, current_price: float):
+        """
+        Open a new position.
+
+        Args:
+            signal: Trading signal (-1 for short, +1 for long)
+            current_price: Current market price
+        """
+        if signal == 0:
+            return
+
+        # Calculate position size
+        max_position_value = self.balance * self.max_position_pct
+        position_size = (max_position_value / current_price) * np.sign(signal)
+
+        # Apply slippage
+        execution_price = current_price * (1 + self.slippage_rate * np.sign(signal))
+
+        # Calculate cost
+        trade_value = abs(position_size * execution_price)
+        commission = trade_value * self.commission_rate
+
+        if self.balance >= trade_value + commission:
+            # Update position
+            self.position.size = position_size
+            self.position.entry_price = execution_price
+            self.position.entry_bar = self.current_step
+
+            # Update balance
+            self.balance -= commission
+
     def _enter_position(self, signal: float, current_price: float):
-        """Enter or modify position"""
-        # Close existing position if opposite signal
-        if self.position.size != 0 and np.sign(signal) != np.sign(self.position.size):
+        """
+        Enter or modify position based on signal.
+
+        This is the main entry point for position management.
+        Handles closing existing positions and opening new ones.
+
+        Args:
+            signal: Trading signal (-1 for short, 0 for flat, +1 for long)
+            current_price: Current market price
+        """
+        # Check if we should close current position
+        if self._should_close_position(signal):
             self._close_position(current_price)
 
-        # Open new position
+        # Open new position if flat and signal is non-zero
         if self.position.size == 0 and signal != 0:
-            # Calculate position size
-            max_position_value = self.balance * self.max_position_pct
-            position_size = (max_position_value / current_price) * np.sign(signal)
-
-            # Apply slippage
-            execution_price = current_price * (1 + self.slippage_rate * np.sign(signal))
-
-            # Calculate cost
-            trade_value = abs(position_size * execution_price)
-            commission = trade_value * self.commission_rate
-
-            if self.balance >= trade_value + commission:
-                # Update position
-                self.position.size = position_size
-                self.position.entry_price = execution_price
-                self.position.entry_bar = self.current_step
-
-                # Update balance
-                self.balance -= commission
+            self._execute_open(signal, current_price)
 
     def _close_position(self, current_price: float):
         """Close current position"""

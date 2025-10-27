@@ -1,0 +1,14 @@
+# Trading Environment Configuration
+# Override via CLI: python train.py env.environment_params.lookback_window=50
+
+environment_params:
+  lookback_window: 20
+  initial_balance: 10_000
+  max_position_pct: 0.95
+  commission_rate: 0.001
+  slippage_rate: 0.0005
+  reward_type: "sharpe"
+  discrete_actions: true
+  randomize_start: true
+  min_episode_length: 100
+  hold_closes_position: false

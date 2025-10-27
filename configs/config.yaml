@@ -5,15 +5,14 @@ defaults:
 - features: fractional_indicators
 experiment:
   name: rl_trading
-  run_name: ${agent.name}_${env.reward_type}_${now:%Y%m%d_%H%M%S}
+  run_name: ${agent.name}_${env.environment_params.reward_type}_${now:%Y%m%d_%H%M%S}
   seed: 42
   device: cpu
 data:
   train_data_path: ../tools/examples/btcusdt_fractional_indicators.parquet
-  val_split: 0.2
-  test_split: 0.1
-  lookback_bars: 20
-  update_frequency: 1
+  val_split: 0.2  # Validation split ratio
+  test_split: 0.1  # Test split ratio
+  update_frequency: 1  # Data update frequency (for live trading)
 
 # Training Configuration
 # Note: Each agent config has recommended values that can override these

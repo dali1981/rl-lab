@@ -56,10 +56,10 @@ def setup_mlflow(cfg: DictConfig):
     # Log parameters
     mlflow.log_params({
         "agent": cfg.agent.name,
-        "environment.reward_type": cfg.env.reward_type,
-        "environment.initial_balance": cfg.env.initial_balance,
-        "environment.commission_rate": cfg.env.commission_rate,
-        "data.lookback_bars": cfg.data.lookback_bars,
+        "environment.reward_type": cfg.env.environment_params.reward_type,
+        "environment.initial_balance": cfg.env.environment_params.initial_balance,
+        "environment.commission_rate": cfg.env.environment_params.commission_rate,
+        "environment.lookback_window": cfg.env.environment_params.lookback_window,
         "training.total_timesteps": cfg.training.total_timesteps,
     })
 
@@ -97,42 +97,55 @@ def create_environments(cfg: DictConfig):
                  f"Train={len(train_df)} bars, Val={len(val_df)} bars, Test={len(test_df)} bars")
     console.print(f"[green]✓[/green] Features: {len(feature_names)} selected")
 
-    # Create environments
+    # Extract environment parameters from config
+    env_params = cfg.env.environment_params
+
+    # Create training environment with randomization enabled
     train_env = TradingEnv(
         df=train_df,
-        lookback_window=cfg.data.lookback_bars,
-        initial_balance=cfg.env.initial_balance,
-        commission_rate=cfg.env.commission_rate,
-        slippage_rate=cfg.env.slippage_rate,
-        reward_type=cfg.env.reward_type,
-        discrete_actions=(cfg.env.action_space.type == "discrete"),
-        max_position_pct=cfg.env.position_sizing.max_position_pct,
+        lookback_window=env_params.lookback_window,
+        initial_balance=env_params.initial_balance,
+        commission_rate=env_params.commission_rate,
+        slippage_rate=env_params.slippage_rate,
+        reward_type=env_params.reward_type,
+        discrete_actions=env_params.discrete_actions,
+        max_position_pct=env_params.max_position_pct,
         features_to_use=feature_names,
+        randomize_start=env_params.randomize_start,
+        min_episode_length=env_params.min_episode_length,
+        hold_closes_position=env_params.hold_closes_position,
     )
 
+    # Create evaluation environment (no randomization for consistency)
     eval_env = TradingEnv(
         df=val_df,
-        lookback_window=cfg.data.lookback_bars,
-        initial_balance=cfg.env.initial_balance,
-        commission_rate=cfg.env.commission_rate,
-        slippage_rate=cfg.env.slippage_rate,
-        reward_type=cfg.env.reward_type,
-        discrete_actions=(cfg.env.action_space.type == "discrete"),
-        max_position_pct=cfg.env.position_sizing.max_position_pct,
+        lookback_window=env_params.lookback_window,
+        initial_balance=env_params.initial_balance,
+        commission_rate=env_params.commission_rate,
+        slippage_rate=env_params.slippage_rate,
+        reward_type=env_params.reward_type,
+        discrete_actions=env_params.discrete_actions,
+        max_position_pct=env_params.max_position_pct,
         features_to_use=feature_names,
+        randomize_start=False,  # Disable for consistent evaluation
+        min_episode_length=env_params.min_episode_length,
+        hold_closes_position=env_params.hold_closes_position,
     )
 
-    # Store test environment for later
+    # Create test environment (no randomization for consistent evaluation)
     test_env = TradingEnv(
         df=test_df,
-        lookback_window=cfg.data.lookback_bars,
-        initial_balance=cfg.env.initial_balance,
-        commission_rate=cfg.env.commission_rate,
-        slippage_rate=cfg.env.slippage_rate,
-        reward_type=cfg.env.reward_type,
-        discrete_actions=(cfg.env.action_space.type == "discrete"),
-        max_position_pct=cfg.env.position_sizing.max_position_pct,
+        lookback_window=env_params.lookback_window,
+        initial_balance=env_params.initial_balance,
+        commission_rate=env_params.commission_rate,
+        slippage_rate=env_params.slippage_rate,
+        reward_type=env_params.reward_type,
+        discrete_actions=env_params.discrete_actions,
+        max_position_pct=env_params.max_position_pct,
         features_to_use=feature_names,
+        randomize_start=False,  # Disable for consistent evaluation
+        min_episode_length=env_params.min_episode_length,
+        hold_closes_position=env_params.hold_closes_position,
     )
 
     return train_env, eval_env, test_env
