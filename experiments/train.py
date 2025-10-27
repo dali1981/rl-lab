@@ -365,7 +365,7 @@ def main(cfg: DictConfig):
     """Main training pipeline"""
     console.print("[bold blue]RL Trading Lab[/bold blue]")
     console.print(f"Agent: [cyan]{cfg.agent.name}[/cyan]")
-    console.print(f"Environment: [cyan]{cfg.env.reward_type}[/cyan] reward")
+    console.print(f"Environment: [cyan]{cfg.env.environment_params.reward_type}[/cyan] reward")
     console.print(f"Device: [cyan]{cfg.experiment.device}[/cyan]\n")
 
     # Setup MLflow
