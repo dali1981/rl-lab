@@ -3,12 +3,15 @@ Trading Environment for RL agents.
 Compatible with Stable-Baselines3 and Gymnasium.
 """
 
+import logging
 import numpy as np
 import pandas as pd
 import gymnasium as gym
 from gymnasium import spaces
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -110,6 +113,13 @@ class TradingEnv(gym.Env):
             'rewards': [],
         }
 
+        # Log initialization parameters
+        logger.info(f"TradingEnv initialized: randomize_start={self.randomize_start}, "
+                   f"hold_closes_position={self.hold_closes_position}, "
+                   f"min_episode_length={self.min_episode_length}, "
+                   f"reward_type={self.reward_type}, "
+                   f"data_length={len(self.df)}")
+
     def reset(
         self,
         *,
@@ -129,11 +139,14 @@ class TradingEnv(gym.Env):
             max_start = self.max_steps - self.min_episode_length
             if max_start > self.start_step:
                 self.current_step = self.np_random.integers(self.start_step, max_start)
+                logger.debug(f"Episode reset: randomized start at step {self.current_step}/{self.max_steps}")
             else:
                 self.current_step = self.start_step
+                logger.debug(f"Episode reset: insufficient data for randomization, start at {self.current_step}")
         else:
             # Always start from beginning (original behavior)
             self.current_step = self.start_step
+            logger.debug(f"Episode reset: fixed start at step {self.current_step}")
 
         # Clear history
         for key in self.history:
@@ -218,6 +231,7 @@ class TradingEnv(gym.Env):
             if action == 0:  # Hold
                 # Configurable behavior: close position or do nothing
                 if self.hold_closes_position and self.position.size != 0:
+                    logger.debug(f"Hold action closing position: size={self.position.size:.4f}")
                     self._close_position(current_price)
                 return
             elif action == 1:  # Buy
@@ -291,13 +305,18 @@ class TradingEnv(gym.Env):
             signal: Trading signal (-1 for short, 0 for flat, +1 for long)
             current_price: Current market price
         """
+        current_pos = self.position.size
+
         # Check if we should close current position
         if self._should_close_position(signal):
+            logger.debug(f"Closing position: current={current_pos:.4f}, signal={signal:.1f}")
             self._close_position(current_price)
 
         # Open new position if flat and signal is non-zero
         if self.position.size == 0 and signal != 0:
+            logger.debug(f"Opening position: signal={signal:.1f}, price={current_price:.2f}")
             self._execute_open(signal, current_price)
+            logger.debug(f"Position opened: size={self.position.size:.4f}")
 
     def _close_position(self, current_price: float):
         """Close current position"""
