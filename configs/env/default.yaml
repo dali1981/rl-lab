@@ -86,6 +86,13 @@ environment_params:
   # Ensures each episode has enough data for meaningful learning
   min_episode_length: 100
 
+  # Minimum holding period (in bars)
+  # Prevents churning by requiring positions to be held for minimum duration
+  # 1 = allow closing after 1 bar (minimal restriction)
+  # 3 = hold for at least 3 bars (moderate)
+  # 5 = hold for at least 5 bars (conservative)
+  min_holding_period: 5
+
   # Whether "hold" action closes positions
   # true  = Hold action closes any open position (go flat)
   # false = Hold action keeps current position (do nothing)

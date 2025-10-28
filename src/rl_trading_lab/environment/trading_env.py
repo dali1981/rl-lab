@@ -57,6 +57,7 @@ class TradingEnv(gym.Env):
         features_to_use: Optional[list] = None,
         randomize_start: bool = True,
         min_episode_length: int = 100,
+        min_holding_period: int = 1,
         hold_closes_position: bool = False,
         price_column: str = "close",
     ):
@@ -68,6 +69,7 @@ class TradingEnv(gym.Env):
         self.price_column = price_column
         self.lookback_window = lookback_window
         self.min_episode_length = min_episode_length
+        self.min_holding_period = min_holding_period
         self.initial_balance = initial_balance
         self.commission_rate = commission_rate
         self.slippage_rate = slippage_rate
@@ -266,7 +268,7 @@ class TradingEnv(gym.Env):
 
         return obs
 
-    def _execute_action(self, action: int):
+    def _execute_action(self, action: Action):
         """Execute trading action"""
         current_price = self._get_current_price()
 
@@ -299,6 +301,12 @@ class TradingEnv(gym.Env):
         """
         # No position to close
         if self.position.size == 0:
+            return False
+
+        # Don't close if minimum holding period not met
+        bars_held = self.current_step - self.position.entry_bar
+        if bars_held < self.min_holding_period:
+            logger.debug(f"Position held for {bars_held} bars, need {self.min_holding_period} bars minimum")
             return False
 
         # Close if taking opposite direction
@@ -370,6 +378,7 @@ class TradingEnv(gym.Env):
         if self._should_close_position(signal):
             logger.debug(f"Closing position: current={current_pos:.4f}, signal={signal:.1f}")
             self._close_position(current_price)
+            return
 
         # Open new position if flat and signal is non-zero
         if self.position.size == 0 and signal != 0:
