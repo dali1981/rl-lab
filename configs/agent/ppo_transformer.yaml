@@ -1,6 +1,7 @@
 # PPO Agent with Transformer Policy Configuration
+# Note: name must be "PPO" for Pydantic validation (policy type is specified in policy_kwargs)
 
-name: "PPO_Transformer"
+name: "PPO"
 algorithm: "stable_baselines3.PPO"
 
 # PPO specific hyperparameters

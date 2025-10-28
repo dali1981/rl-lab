@@ -10,8 +10,16 @@ import gymnasium as gym
 from gymnasium import spaces
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
+from enum import IntEnum
 
 logger = logging.getLogger(__name__)
+
+
+class Action(IntEnum):
+    """Trading actions for discrete action space"""
+    HOLD = 0
+    BUY = 1
+    SELL = 2
 
 
 @dataclass
@@ -56,8 +64,10 @@ class TradingEnv(gym.Env):
 
         # Store configuration
         self.df = df.copy()
+
         self.price_column = price_column
         self.lookback_window = lookback_window
+        self.min_episode_length = min_episode_length
         self.initial_balance = initial_balance
         self.commission_rate = commission_rate
         self.slippage_rate = slippage_rate
@@ -65,7 +75,6 @@ class TradingEnv(gym.Env):
         self.discrete_actions = discrete_actions
         self.max_position_pct = max_position_pct
         self.randomize_start = randomize_start
-        self.min_episode_length = min_episode_length
         self.hold_closes_position = hold_closes_position
 
         # Validate price column exists
@@ -87,6 +96,28 @@ class TradingEnv(gym.Env):
 
         self.n_features = len(self.features)
 
+        # Clean NaN values from data at initialization
+        # TODO: This should be done BEFORE splitting data in train.py, not here.
+        # Cleaning after split means train/val/test may have different amounts of usable data.
+        # Only drop rows where features we're using OR price column have NaN
+        initial_rows = len(self.df)
+        required_columns = self.features + [self.price_column]
+        self.df = self.df.dropna(subset=required_columns).reset_index(drop=True)
+        rows_dropped = initial_rows - len(self.df)
+        if rows_dropped > 0:
+            logger.info(f"Dropped {rows_dropped} rows with NaN in required columns at initialization")
+
+        # Validate sufficient data after cleaning
+        min_required_rows = self.lookback_window + self.min_episode_length + 1
+        if len(self.df) < min_required_rows:
+            raise ValueError(
+                f"Insufficient data after cleaning NaN values. "
+                f"Need at least {min_required_rows} rows "
+                f"(lookback_window={self.lookback_window} + min_episode_length={self.min_episode_length} + 1), "
+                f"but only have {len(self.df)} rows after dropping {rows_dropped} NaN rows. "
+                f"Check your input data and feature engineering."
+            )
+
         # Define action and observation spaces
         if discrete_actions:
             # 0: Hold, 1: Buy, 2: Sell
@@ -98,8 +129,8 @@ class TradingEnv(gym.Env):
             )
 
         # Observation space: features + position info
-        # Features + [position, entry_price, position_pnl, cash_pct]
-        obs_dim = self.n_features * self.lookback_window + 4
+        # Features + [position, position_pnl, cash_pct]
+        obs_dim = self.n_features * self.lookback_window + 3
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
         )
@@ -222,16 +253,12 @@ class TradingEnv(gym.Env):
 
         position_info = np.array([
             self.position.size,  # Current position
-            self.position.entry_price / current_price if self.position.size != 0 else 0,
             position_pnl,  # Unrealized PnL
             self.balance / self.initial_balance,  # Cash percentage
         ])
 
         # Combine features and position info
         obs = np.concatenate([feature_vector, position_info]).astype(np.float32)
-
-        # Handle NaN values (important for z-scores at the beginning)
-        obs = np.nan_to_num(obs, nan=0.0, posinf=5.0, neginf=-5.0)
 
         return obs
 
@@ -240,16 +267,16 @@ class TradingEnv(gym.Env):
         current_price = self._get_current_price()
 
         if self.discrete_actions:
-            # Discrete actions: 0=Hold, 1=Buy, 2=Sell
-            if action == 0:  # Hold
+            # Use Action enum for clarity
+            if action == Action.HOLD:
                 # Configurable behavior: close position or do nothing
                 if self.hold_closes_position and self.position.size != 0:
                     logger.debug(f"Hold action closing position: size={self.position.size:.4f}")
                     self._close_position(current_price)
                 return
-            elif action == 1:  # Buy
+            elif action == Action.BUY:
                 self._enter_position(1.0, current_price)
-            elif action == 2:  # Sell
+            elif action == Action.SELL:
                 self._enter_position(-1.0, current_price)
         else:
             # Continuous action: -1 to 1

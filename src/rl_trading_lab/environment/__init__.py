@@ -1,4 +1,4 @@
 """Trading environment module"""
-from .trading_env import TradingEnv
+from .trading_env import TradingEnv, Action
 
-__all__ = ["TradingEnv"]
+__all__ = ["TradingEnv", "Action"]

@@ -1,0 +1,56 @@
+# DQN Agent Configuration - AGGRESSIVE EXPLORATION
+#
+# This config is designed to encourage more exploration and risk-taking
+# to push beyond the 0.0186 plateau.
+#
+# Key changes from default:
+# 1. Extended exploration (0.3 = 30% of training instead of 10%)
+# 2. Higher final epsilon (0.2 instead of 0.05) - keeps exploring longer
+# 3. Larger network (512x512 instead of 256x256) - more capacity
+# 4. Slower learning rate - more stable learning
+# 5. Larger buffer - better sample diversity
+
+name: "DQN_Aggressive"
+algorithm: "stable_baselines3.DQN"
+
+hyperparameters:
+  # Learning
+  learning_rate: 5.0e-5  # Slower learning for more stable policy updates
+  buffer_size: 200_000   # Larger replay buffer for more diversity
+  learning_starts: 5_000  # Start training later with better samples
+  batch_size: 64         # Larger batches for more stable gradients
+
+  # Discount - slightly lower gamma to focus on short-term gains
+  gamma: 0.97  # Was 0.99, now prioritizes immediate rewards more
+
+  # EXPLORATION - THE KEY CHANGES
+  exploration_fraction: 0.3  # 30% of training for exploration (was 10%)
+  exploration_initial_eps: 1.0
+  exploration_final_eps: 0.2  # Keep exploring 20% of time (was 5%)
+
+  # Target network
+  target_update_interval: 500  # Update more frequently (was 1000)
+  tau: 1.0
+
+  # Training
+  train_freq: 4
+  gradient_steps: 1
+
+  # Network architecture - BIGGER for more capacity
+  policy: "MlpPolicy"
+  policy_kwargs:
+    net_arch: [512, 512]  # Larger network (was [256, 256])
+    activation_fn: "ReLU"
+
+  # Double DQN
+  optimize_memory_usage: false
+  max_grad_norm: 10
+
+verbose: 1
+tensorboard_log: "./logs/dqn_aggressive"
+
+# Training timesteps - train LONGER
+training:
+  total_timesteps: 500_000  # More time to explore (was 200k)
+  eval_freq: 10_000
+  save_freq: 20_000

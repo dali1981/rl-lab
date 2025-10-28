@@ -203,7 +203,7 @@ class DataProcessor:
 
     def process(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, List[str]]:
         """
-        Full pipeline: load, engineer, select, and split.
+        Full pipeline: load, engineer, select, clean, and split.
 
         Returns:
             train_df, val_df, test_df, observation_features
@@ -217,7 +217,16 @@ class DataProcessor:
         # 3. Select observation features
         observation_features = self.select_observation_features(df)
 
-        # 4. Create splits
+        # 4. Clean NaN values BEFORE splitting
+        # Only keep rows where observation features and price column are valid
+        initial_rows = len(df)
+        required_columns = observation_features + ['close']  # Need close for price
+        df = df.dropna(subset=required_columns).reset_index(drop=True)
+        rows_dropped = initial_rows - len(df)
+        if rows_dropped > 0:
+            logger.info(f"✓ Dropped {rows_dropped} rows with NaN in observation features (kept {len(df)})")
+
+        # 5. Create splits
         train_df, val_df, test_df = self.create_splits(df)
 
         return train_df, val_df, test_df, observation_features

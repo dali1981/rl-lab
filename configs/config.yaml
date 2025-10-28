@@ -12,7 +12,7 @@ experiment:
   name: rl_trading
   run_name: ${agent.name}_${env.environment_params.reward_type}_${now:%Y%m%d_%H%M%S}
   seed: 42
-  device: cpu  # cpu or cuda
+  device: cpu  # cpu, cuda, or mps (Apple Silicon GPU)
 
 # =============================================================================
 # DATA CONFIGURATION

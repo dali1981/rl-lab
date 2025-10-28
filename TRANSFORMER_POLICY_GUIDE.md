@@ -114,8 +114,14 @@ policy_kwargs:
 ### 1. Train with Transformer Policy
 
 ```bash
-# Use transformer with PPO
+# PPO with transformer
 uv run python experiments/train.py agent=ppo_transformer
+
+# A2C with transformer
+uv run python experiments/train.py agent=a2c_transformer
+
+# DQN with transformer (discrete actions only)
+uv run python experiments/train.py agent=dqn_transformer
 
 # Override hyperparameters
 uv run python experiments/train.py \
@@ -297,9 +303,16 @@ Compare to MLP policy ([256, 256]):
 
 1. `src/rl_trading_lab/models/__init__.py` - Module initialization
 2. `src/rl_trading_lab/models/transformer_policy.py` - Main implementation
-3. `configs/agent/ppo_transformer.yaml` - Transformer agent config
-4. `experiments/test_transformer.py` - Test suite
-5. `TRANSFORMER_POLICY_GUIDE.md` - This guide
+3. `configs/agent/ppo_transformer.yaml` - PPO + Transformer config
+4. `configs/agent/a2c_transformer.yaml` - A2C + Transformer config
+5. `configs/agent/dqn_transformer.yaml` - DQN + Transformer config
+6. `experiments/test_transformer.py` - Test suite
+7. `TRANSFORMER_POLICY_GUIDE.md` - This guide
+
+**Files Modified:**
+- `src/rl_trading_lab/config/agent.py` - Added transformer fields to PolicyKwargs
+- `src/rl_trading_lab/agents/sb3_agents.py` - Added transformer policy support
+- `.gitignore` - Fixed to allow source code in models/
 
 ## Next Steps
 
