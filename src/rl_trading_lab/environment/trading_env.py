@@ -146,6 +146,8 @@ class TradingEnv(gym.Env):
 
         # Trade tracking
         self.num_trades = 0  # Count actual executed trades
+        self.trade_history = []  # List of completed round-trip trades
+        self._open_trade = None  # Currently open trade tracking
 
         # History tracking
         self.history = {
@@ -176,6 +178,8 @@ class TradingEnv(gym.Env):
         self.balance = self.initial_balance
         self.position = Position()
         self.num_trades = 0  # Reset trade counter
+        self.trade_history.clear()  # Clear trade history
+        self._open_trade = None  # Clear open trade tracker
 
         # Reset step counter with optional randomization
         if self.randomize_start:
@@ -338,6 +342,17 @@ class TradingEnv(gym.Env):
             self.num_trades += 1
             logger.debug(f"Trade #{self.num_trades}: {'LONG' if signal > 0 else 'SHORT'} {abs(position_size):.4f} @ ${execution_price:.2f}")
 
+            # Track open trade for history
+            self._open_trade = {
+                'trade_id': self.num_trades,
+                'open_step': self.current_step,
+                'open_timestamp': self.df.iloc[self.current_step].get('timestamp', None) if 'timestamp' in self.df.columns else None,
+                'side': 'LONG' if signal > 0 else 'SHORT',
+                'entry_price': execution_price,
+                'position_size': position_size,
+                'entry_commission': commission,
+            }
+
     def _enter_position(self, signal: float, current_price: float):
         """
         Enter or modify position based on signal.
@@ -382,6 +397,22 @@ class TradingEnv(gym.Env):
 
         # Log closing trade
         logger.debug(f"Position closed: P&L=${pnl:.2f}, Commission=${commission:.2f}, Net=${pnl-commission:.2f}")
+
+        # Record completed trade in history
+        if self._open_trade is not None:
+            trade_value_at_entry = abs(self._open_trade['position_size'] * self._open_trade['entry_price'])
+            self.trade_history.append({
+                **self._open_trade,
+                'close_step': self.current_step,
+                'close_timestamp': self.df.iloc[self.current_step].get('timestamp', None) if 'timestamp' in self.df.columns else None,
+                'exit_price': execution_price,
+                'pnl': pnl,
+                'exit_commission': commission,
+                'net_pnl': pnl - commission,
+                'return_pct': (pnl - commission) / trade_value_at_entry if trade_value_at_entry > 0 else 0.0,
+                'hold_bars': self.current_step - self._open_trade['open_step'],
+            })
+            self._open_trade = None
 
         # Reset position
         self.position = Position()
@@ -478,6 +509,27 @@ class TradingEnv(gym.Env):
         cummax = np.maximum.accumulate(balance_array)
         drawdown = (cummax - balance_array) / cummax
         return drawdown.max()
+
+    def get_trade_history(self) -> list:
+        """
+        Get history of completed round-trip trades.
+
+        Returns:
+            List of trade dictionaries with entry/exit details.
+            Each trade contains:
+            - trade_id: Trade number
+            - open_step, close_step: Step numbers when opened/closed
+            - open_timestamp, close_timestamp: Timestamps (if available)
+            - side: 'LONG' or 'SHORT'
+            - entry_price, exit_price: Execution prices
+            - position_size: Size of position
+            - pnl: Raw profit/loss
+            - entry_commission, exit_commission: Commission paid
+            - net_pnl: P&L after commissions
+            - return_pct: Return as percentage of trade value
+            - hold_bars: Number of bars position was held
+        """
+        return self.trade_history
 
     def render(self):
         """Render environment (for debugging)"""
