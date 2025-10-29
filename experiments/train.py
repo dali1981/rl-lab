@@ -14,9 +14,11 @@ import sys
 from pathlib import Path
 import logging
 from datetime import datetime
+import subprocess
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
+from hydra.core.hydra_config import HydraConfig
 import mlflow
 import mlflow.sklearn
 import numpy as np
@@ -69,6 +71,34 @@ def setup_mlflow(config: RootConfig):
     # Log full config as artifact for reproducibility
     config_dict = config.model_dump()
     mlflow.log_dict(config_dict, "config.yaml")
+
+    # Log all individual config files for complete reproducibility
+    configs_dir = Path(__file__).parent.parent / "configs"
+    if configs_dir.exists():
+        mlflow.log_artifacts(str(configs_dir), "configs")
+        console.print(f"[green]✓[/green] All config files logged ({len(list(configs_dir.rglob('*.yaml')))} YAML files)")
+
+    # Log Hydra CLI overrides
+    try:
+        hydra_cfg = HydraConfig.get()
+        cli_overrides = hydra_cfg.overrides.task
+        if cli_overrides:
+            mlflow.log_dict({"cli_overrides": cli_overrides}, "hydra/cli_overrides.yaml")
+            console.print(f"[green]✓[/green] Hydra overrides logged: {cli_overrides}")
+    except Exception as e:
+        logger.debug(f"Could not log Hydra overrides: {e}")
+
+    # Log git commit hash for code versioning
+    try:
+        git_hash = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).parent,
+            stderr=subprocess.DEVNULL
+        ).decode("utf-8").strip()
+        mlflow.log_param("git_commit", git_hash)
+        console.print(f"[green]✓[/green] Git commit logged: {git_hash[:8]}")
+    except Exception as e:
+        logger.debug(f"Could not log git commit: {e}")
 
     console.print(f"[green]✓[/green] MLflow tracking enabled: {config.logging.mlflow.tracking_uri}")
     console.print(f"[green]✓[/green] Full config logged to MLflow")

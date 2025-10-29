@@ -9,26 +9,19 @@ import pandas as pd
 import gymnasium as gym
 from gymnasium import spaces
 from typing import Optional, Dict, Any, Tuple
-from dataclasses import dataclass
 from enum import IntEnum
+
+from .portfolio import Portfolio
 
 logger = logging.getLogger(__name__)
 
+ONE_TRADE = True
 
 class Action(IntEnum):
     """Trading actions for discrete action space"""
     HOLD = 0
     BUY = 1
     SELL = 2
-
-
-@dataclass
-class Position:
-    """Track current position state"""
-    size: float = 0.0  # Position size (positive=long, negative=short, 0=flat)
-    entry_price: float = 0.0
-    entry_bar: int = 0
-    current_bar: int = 0
 
 
 class TradingEnv(gym.Env):
@@ -78,6 +71,22 @@ class TradingEnv(gym.Env):
         self.max_position_pct = max_position_pct
         self.randomize_start = randomize_start
         self.hold_closes_position = hold_closes_position
+
+        # Validate reward type
+        valid_reward_types = ["returns", "pnl"]
+        if self.reward_type not in valid_reward_types:
+            if self.reward_type == "sharpe":
+                raise ValueError(
+                    f"reward_type='sharpe' is not supported. "
+                    f"Sharpe ratio cannot be meaningfully calculated over short step windows. "
+                    f"Use reward_type='returns' or 'pnl' instead. "
+                    f"Episode-level Sharpe ratio is automatically calculated and available in the info dict."
+                )
+            else:
+                raise ValueError(
+                    f"Invalid reward_type='{self.reward_type}'. "
+                    f"Valid options: {valid_reward_types}"
+                )
 
         # Validate price column exists
         if self.price_column not in self.df.columns:
@@ -132,7 +141,7 @@ class TradingEnv(gym.Env):
 
         # Observation space: features + position info
         # Features + [position, position_pnl, cash_pct]
-        obs_dim = self.n_features * self.lookback_window + 3
+        obs_dim = self.n_features * (self.lookback_window + 1) + 3
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
         )
@@ -142,18 +151,18 @@ class TradingEnv(gym.Env):
         self.start_step = self.lookback_window
         self.max_steps = len(self.df) - 1
 
-        # Account state
-        self.balance = initial_balance
-        self.position = Position()
-
-        # Trade tracking
-        self.num_trades = 0  # Count actual executed trades
-        self.trade_history = []  # List of completed round-trip trades
-        self._open_trade = None  # Currently open trade tracking
+        # Portfolio management
+        self.portfolio = Portfolio(
+            initial_cash=initial_balance,
+            commission_rate=commission_rate,
+            slippage_rate=slippage_rate,
+            max_position_pct=max_position_pct,
+            min_holding_period=min_holding_period,
+        )
 
         # History tracking
         self.history = {
-            'balance': [],
+            'portfolio_value': [],
             'returns': [],
             'positions': [],
             'actions': [],
@@ -176,12 +185,8 @@ class TradingEnv(gym.Env):
         """Reset the environment to initial state"""
         super().reset(seed=seed)
 
-        # Reset account state
-        self.balance = self.initial_balance
-        self.position = Position()
-        self.num_trades = 0  # Reset trade counter
-        self.trade_history.clear()  # Clear trade history
-        self._open_trade = None  # Clear open trade tracker
+        # Reset portfolio
+        self.portfolio.reset()
 
         # Reset step counter with optional randomization
         if self.randomize_start:
@@ -212,7 +217,8 @@ class TradingEnv(gym.Env):
         """Execute one step in the environment"""
 
         # Store previous balance for reward calculation
-        prev_balance = self._get_portfolio_value()
+        current_price = self._get_current_price()
+        prev_balance = self.portfolio.get_portfolio_value(current_price)
 
         # Execute action
         self._execute_action(action)
@@ -221,13 +227,14 @@ class TradingEnv(gym.Env):
         self.current_step += 1
 
         # Calculate reward
-        current_balance = self._get_portfolio_value()
+        current_price = self._get_current_price()
+        current_balance = self.portfolio.get_portfolio_value(current_price)
         reward = self._calculate_reward(prev_balance, current_balance)
 
         # Update history
-        self.history['balance'].append(current_balance)
+        self.history['portfolio_value'].append(current_balance)
         self.history['returns'].append((current_balance - prev_balance) / prev_balance)
-        self.history['positions'].append(self.position.size)
+        self.history['positions'].append(self.portfolio.position.size)
         self.history['actions'].append(action)
         self.history['rewards'].append(reward)
 
@@ -245,7 +252,7 @@ class TradingEnv(gym.Env):
         """Get current observation"""
         # Get lookback window of features
         start_idx = self.current_step - self.lookback_window
-        end_idx = self.current_step
+        end_idx = self.current_step + 1
 
         feature_window = self.df.iloc[start_idx:end_idx][self.features].values
         feature_vector = feature_window.flatten()
@@ -253,14 +260,20 @@ class TradingEnv(gym.Env):
         # Add position information
         current_price = self._get_current_price()
         position_pnl = 0.0
-        if self.position.size != 0:
-            position_pnl = (current_price - self.position.entry_price) / self.position.entry_price
-            position_pnl *= np.sign(self.position.size)
+        if self.portfolio.position.size != 0:
+            position_pnl = (current_price - self.portfolio.position.entry_price) / self.portfolio.position.entry_price
+            position_pnl *= np.sign(self.portfolio.position.size)
 
+        portfolio_value = self.portfolio.get_portfolio_value(current_price)
+
+        # TODO: Investigate if keeping both position_pnl (current trade) and
+        # portfolio_ratio (cumulative episode performance) provides redundant vs
+        # complementary signals. Position_pnl is localized to current position,
+        # portfolio_ratio reflects total account performance including all past trades.
         position_info = np.array([
-            self.position.size,  # Current position
-            position_pnl,  # Unrealized PnL
-            self.balance / self.initial_balance,  # Cash percentage
+            self.portfolio.position.size,  # Current position
+            position_pnl,  # Unrealized PnL (percentage)
+            portfolio_value / self.initial_balance,  # Portfolio percentage (total account performance)
         ])
 
         # Combine features and position info
@@ -276,213 +289,72 @@ class TradingEnv(gym.Env):
             # Use Action enum for clarity
             if action == Action.HOLD:
                 # Configurable behavior: close position or do nothing
-                if self.hold_closes_position and self.position.size != 0:
-                    logger.debug(f"Hold action closing position: size={self.position.size:.4f}")
-                    self._close_position(current_price)
+                if self.hold_closes_position and self.portfolio.position.size != 0:
+                    logger.debug(f"Hold action closing position: size={self.portfolio.position.size:.4f}")
+                    self.portfolio.close_position(current_price, self.current_step, self.df)
                 return
             elif action == Action.BUY:
-                self._enter_position(1.0, current_price)
+                self.portfolio.execute_trade(1.0, current_price, self.current_step, self.df)
             elif action == Action.SELL:
-                self._enter_position(-1.0, current_price)
+                self.portfolio.execute_trade(-1.0, current_price, self.current_step, self.df)
         else:
             # Continuous action: -1 to 1
             if abs(action) > 0.1:  # Threshold to avoid tiny trades
-                self._enter_position(action, current_price)
-
-    def _should_close_position(self, signal: float) -> bool:
-        """
-        Determine if current position should be closed.
-
-        Args:
-            signal: Trading signal (-1, 0, +1)
-
-        Returns:
-            True if position should be closed
-        """
-        # No position to close
-        if self.position.size == 0:
-            return False
-
-        # Don't close if minimum holding period not met
-        bars_held = self.current_step - self.position.entry_bar
-        if bars_held < self.min_holding_period:
-            logger.debug(f"Position held for {bars_held} bars, need {self.min_holding_period} bars minimum")
-            return False
-
-        # Close if taking opposite direction
-        if np.sign(signal) != np.sign(self.position.size):
-            return True
-
-        return False
-
-    def _execute_open(self, signal: float, current_price: float):
-        """
-        Open a new position.
-
-        Args:
-            signal: Trading signal (-1 for short, +1 for long)
-            current_price: Current market price
-        """
-        if signal == 0:
-            return
-
-        # Calculate position size
-        max_position_value = self.balance * self.max_position_pct
-        position_size = (max_position_value / current_price) * np.sign(signal)
-
-        # Apply slippage
-        execution_price = current_price * (1 + self.slippage_rate * np.sign(signal))
-
-        # Calculate cost
-        trade_value = abs(position_size * execution_price)
-        commission = trade_value * self.commission_rate
-
-        if self.balance >= trade_value + commission:
-            # Update position
-            self.position.size = position_size
-            self.position.entry_price = execution_price
-            self.position.entry_bar = self.current_step
-
-            # Update balance
-            self.balance -= commission
-
-            # Increment trade counter
-            self.num_trades += 1
-            logger.debug(f"Trade #{self.num_trades}: {'LONG' if signal > 0 else 'SHORT'} {abs(position_size):.4f} @ ${execution_price:.2f}")
-
-            # Track open trade for history
-            self._open_trade = {
-                'trade_id': self.num_trades,
-                'open_step': self.current_step,
-                'open_timestamp': self.df.iloc[self.current_step].get('timestamp', None) if 'timestamp' in self.df.columns else None,
-                'side': 'LONG' if signal > 0 else 'SHORT',
-                'entry_price': execution_price,
-                'position_size': position_size,
-                'entry_commission': commission,
-            }
-
-    def _enter_position(self, signal: float, current_price: float):
-        """
-        Enter or modify position based on signal.
-
-        This is the main entry point for position management.
-        Handles closing existing positions and opening new ones.
-
-        Args:
-            signal: Trading signal (-1 for short, 0 for flat, +1 for long)
-            current_price: Current market price
-        """
-        current_pos = self.position.size
-
-        # Check if we should close current position
-        if self._should_close_position(signal):
-            logger.debug(f"Closing position: current={current_pos:.4f}, signal={signal:.1f}")
-            self._close_position(current_price)
-            return
-
-        # Open new position if flat and signal is non-zero
-        if self.position.size == 0 and signal != 0:
-            logger.debug(f"Opening position: signal={signal:.1f}, price={current_price:.2f}")
-            self._execute_open(signal, current_price)
-            logger.debug(f"Position opened: size={self.position.size:.4f}")
-
-    def _close_position(self, current_price: float):
-        """Close current position"""
-        if self.position.size == 0:
-            return
-
-        # Apply slippage (opposite direction)
-        execution_price = current_price * (1 - self.slippage_rate * np.sign(self.position.size))
-
-        # Calculate PnL
-        pnl = self.position.size * (execution_price - self.position.entry_price)
-
-        # Calculate commission
-        trade_value = abs(self.position.size * execution_price)
-        commission = trade_value * self.commission_rate
-
-        # Update balance
-        self.balance += pnl - commission
-
-        # Log closing trade
-        logger.debug(f"Position closed: P&L=${pnl:.2f}, Commission=${commission:.2f}, Net=${pnl-commission:.2f}")
-
-        # Record completed trade in history
-        if self._open_trade is not None:
-            trade_value_at_entry = abs(self._open_trade['position_size'] * self._open_trade['entry_price'])
-            self.trade_history.append({
-                **self._open_trade,
-                'close_step': self.current_step,
-                'close_timestamp': self.df.iloc[self.current_step].get('timestamp', None) if 'timestamp' in self.df.columns else None,
-                'exit_price': execution_price,
-                'pnl': pnl,
-                'exit_commission': commission,
-                'net_pnl': pnl - commission,
-                'return_pct': (pnl - commission) / trade_value_at_entry if trade_value_at_entry > 0 else 0.0,
-                'hold_bars': self.current_step - self._open_trade['open_step'],
-            })
-            self._open_trade = None
-
-        # Reset position
-        self.position = Position()
+                self.portfolio.execute_trade(action, current_price, self.current_step, self.df)
 
     def close_all_positions(self):
         """
         Close all open positions at current price.
         Should be called at episode end to realize all P&L.
         """
-        if self.position.size != 0:
+        if self.portfolio.position.size != 0:
             current_price = self._get_current_price()
-            logger.debug(f"Closing position at episode end: size={self.position.size:.4f}, price={current_price:.2f}")
-            self._close_position(current_price)
-
-    def _get_portfolio_value(self) -> float:
-        """Get total portfolio value (cash + position value)"""
-        if self.position.size == 0:
-            return self.balance
-
-        current_price = self._get_current_price()
-        position_value = abs(self.position.size) * current_price
-        unrealized_pnl = self.position.size * (current_price - self.position.entry_price)
-
-        return self.balance + unrealized_pnl
+            self.portfolio.close_all_positions(current_price, self.current_step, self.df)
 
     def _get_current_price(self) -> float:
         """Get current price from data using configured price column"""
         return self.df.iloc[self.current_step][self.price_column]
 
     def _calculate_reward(self, prev_value: float, current_value: float) -> float:
-        """Calculate reward based on configured reward type"""
+        """
+        Calculate reward based on configured reward type.
+
+        NOTE: Sharpe ratio is NOT a valid reward type because:
+        - Requires many samples for meaningful variance estimation
+        - Short windows (e.g., 20 steps) create non-stationary signals
+        - Agent would optimize short-term Sharpe, not episode Sharpe
+        - Episode-level Sharpe is available in info dict instead
+
+        Valid reward types:
+        - "returns": Percentage return per step (recommended)
+        - "pnl": Absolute dollar P&L per step
+        """
         returns = (current_value - prev_value) / prev_value
 
         if self.reward_type == "returns":
             reward = returns
         elif self.reward_type == "pnl":
             reward = current_value - prev_value
-        elif self.reward_type == "sharpe":
-            # Simple Sharpe approximation
-            if len(self.history['returns']) > 1:
-                returns_array = np.array(self.history['returns'][-20:])  # Last 20 returns
-                reward = returns_array.mean() / (returns_array.std() + 1e-8)
-            else:
-                reward = returns
         else:
+            # Default to returns for unknown types
             reward = returns
 
         # Clip reward to prevent extreme values
-        # Sharpe ratios typically range from -3 to 3, returns are small decimals
         return np.clip(reward, -10.0, 10.0)
 
     def _is_terminated(self) -> bool:
         """Check if episode should terminate"""
-        # Terminate if balance too low
-        if self.balance < self.initial_balance * 0.2:  # Lost 80%
+        current_price = self._get_current_price()
+        portfolio_value = self.portfolio.get_portfolio_value(current_price)
+
+        # Terminate if portfolio value too low
+        if portfolio_value < self.initial_balance * 0.2:  # Lost 80%
             return True
 
         # Check max drawdown
-        if len(self.history['balance']) > 0:
-            peak = max(self.history['balance'])
-            drawdown = (peak - self._get_portfolio_value()) / peak
+        if len(self.history['portfolio_value']) > 0:
+            peak = max(self.history['portfolio_value'])
+            drawdown = (peak - portfolio_value) / peak
             if drawdown > 0.3:  # 30% drawdown
                 return True
 
@@ -490,15 +362,16 @@ class TradingEnv(gym.Env):
 
     def _get_info(self) -> Dict[str, Any]:
         """Get info dictionary"""
-        portfolio_value = self._get_portfolio_value()
+        current_price = self._get_current_price()
+        portfolio_value = self.portfolio.get_portfolio_value(current_price)
 
         info = {
             'step': self.current_step,
-            'balance': self.balance,
-            'portfolio_value': portfolio_value,
-            'position': self.position.size,
+            'cash': self.portfolio.cash.balance,  # Available cash (buying power)
+            'portfolio_value': portfolio_value,  # Total account value (cash + unrealized P&L)
+            'position': self.portfolio.position.size,
             'total_return': (portfolio_value - self.initial_balance) / self.initial_balance,
-            'num_trades': self.num_trades,  # Add trade count to info
+            'num_trades': self.portfolio.num_trades,
         }
 
         # Add performance metrics if we have history
@@ -510,13 +383,13 @@ class TradingEnv(gym.Env):
         return info
 
     def _calculate_max_drawdown(self) -> float:
-        """Calculate maximum drawdown from balance history"""
-        if len(self.history['balance']) == 0:
+        """Calculate maximum drawdown from portfolio value history"""
+        if len(self.history['portfolio_value']) == 0:
             return 0.0
 
-        balance_array = np.array(self.history['balance'])
-        cummax = np.maximum.accumulate(balance_array)
-        drawdown = (cummax - balance_array) / cummax
+        portfolio_array = np.array(self.history['portfolio_value'])
+        cummax = np.maximum.accumulate(portfolio_array)
+        drawdown = (cummax - portfolio_array) / cummax
         return drawdown.max()
 
     def get_trade_history(self) -> list:
@@ -538,10 +411,10 @@ class TradingEnv(gym.Env):
             - return_pct: Return as percentage of trade value
             - hold_bars: Number of bars position was held
         """
-        return self.trade_history
+        return self.portfolio.get_trade_history()
 
     def render(self):
         """Render environment (for debugging)"""
         info = self._get_info()
-        print(f"Step: {info['step']}, Balance: ${info['balance']:.2f}, "
+        print(f"Step: {info['step']}, Portfolio: ${info['portfolio_value']:.2f}, "
               f"Position: {info['position']:.4f}, Return: {info['total_return']:.2%}")

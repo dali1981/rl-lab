@@ -61,15 +61,18 @@ environment_params:
   # Reward function type
   # Options:
   #   "returns" - Percentage returns per step (recommended)
-  #   "sharpe"  - Rolling Sharpe ratio (risk-adjusted)
-  #   "pnl"     - Absolute dollar P&L
+  #   "pnl"     - Absolute dollar P&L per step
+  #
+  # NOTE: "sharpe" is NOT a valid reward type because Sharpe ratio requires
+  # many samples for meaningful variance estimation and cannot be calculated
+  # over short step windows. Episode-level Sharpe ratio is automatically
+  # calculated and available in the info dict for performance tracking.
   #
   # Reward Units:
-  #   | reward_type | Unit                    | Example  | Meaning                        |
-  #   |-------------|-------------------------|----------|--------------------------------|
-  #   | "returns"   | Decimal ratio (%)       | 0.001    | 0.1% return per step          |
-  #   | "sharpe"    | Unitless (Sharpe ratio) | -0.80    | Negative risk-adjusted returns |
-  #   | "pnl"       | Dollars                 | 5.50     | $5.50 profit per step         |
+  #   | reward_type | Unit              | Example  | Meaning                   |
+  #   |-------------|-------------------|----------|---------------------------|
+  #   | "returns"   | Decimal ratio (%) | 0.001    | 0.1% return per step     |
+  #   | "pnl"       | Dollars           | 5.50     | $5.50 profit per step    |
   reward_type: "returns"
 
   # Action space type
