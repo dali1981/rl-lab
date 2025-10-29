@@ -21,7 +21,7 @@ class BinanceDataAdapter:
     This adapter connects to the dlt-starter data infrastructure and loads
     aggregated trade data for specified symbols and date ranges.
 
-    Data is stored in: s3://binance-data/warehouse/binance_test.db/{SYMBOL}/
+    Data is stored in: s3://binance-data/warehouse/binance_test/{SYMBOL}/
 
     Example:
         >>> adapter = BinanceDataAdapter()
@@ -32,7 +32,7 @@ class BinanceDataAdapter:
     def __init__(
         self,
         bucket_url: str = "s3://binance-data/warehouse",
-        dataset_name: str = "binance_test.db",
+        dataset_name: str = "binance_test",
         storage_options: Optional[dict] = None,
     ):
         """
