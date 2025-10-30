@@ -82,10 +82,12 @@ class CheckpointManager:
         logger.info(f"Saved model to {model_path}")
 
         # Save VecNormalize if available
-        if vec_env is not None:
+        if vec_env is not None and isinstance(vec_env, VecNormalize):
             vecnorm_path = save_path.parent / f"{save_path.stem}_vecnormalize.pkl"
             vec_env.save(vecnorm_path)
             logger.info(f"Saved VecNormalize to {vecnorm_path}")
+        elif vec_env is not None:
+            logger.debug("VecNormalize not used, skipping normalization stats save")
 
         # Create and save metadata
         checkpoint_metadata = self._create_metadata(model, metadata)
@@ -397,33 +399,60 @@ class CheckpointManager:
         logger.warning("Could not infer algorithm, defaulting to PPO")
         return sb3.PPO
 
-    def _wrap_env_with_vecnormalize(self, env: Any, model: BaseAlgorithm) -> VecNormalize:
-        """Wrap environment with VecNormalize to match training"""
+    def _wrap_env_with_vecnormalize(self, env: Any, model: BaseAlgorithm, use_vecnormalize: bool = True) -> Any:
+        """
+        Wrap environment to match training setup.
+
+        Args:
+            env: Raw environment
+            model: Loaded model
+            use_vecnormalize: Whether to wrap with VecNormalize (default: True)
+
+        Returns:
+            Wrapped environment (VecNormalize or DummyVecEnv)
+        """
         # Wrap with Monitor
         monitored_env = Monitor(env)
         env_func = lambda e=monitored_env: e
         vec_env = DummyVecEnv([env_func])
 
-        # Wrap with VecNormalize
-        gamma = model.gamma if hasattr(model, 'gamma') else 0.99
-        vec_env = VecNormalize(
-            vec_env,
-            norm_obs=True,
-            norm_reward=False,  # Don't normalize during eval
-            clip_obs=10.0,
-            training=False,
-            gamma=gamma,
-        )
+        # Optionally wrap with VecNormalize
+        if use_vecnormalize:
+            gamma = model.gamma if hasattr(model, 'gamma') else 0.99
+            vec_env = VecNormalize(
+                vec_env,
+                norm_obs=True,
+                norm_reward=False,  # Don't normalize during eval
+                clip_obs=10.0,
+                training=False,
+                gamma=gamma,
+            )
 
         return vec_env
 
     def _load_vecnormalize_stats(
         self,
         checkpoint_path: Path,
-        vec_env: VecNormalize,
+        vec_env: Any,
         verbose: int = 1
     ) -> bool:
-        """Load VecNormalize stats from various possible locations"""
+        """
+        Load VecNormalize stats from various possible locations.
+
+        Args:
+            checkpoint_path: Path to model checkpoint
+            vec_env: Wrapped environment (VecNormalize or DummyVecEnv)
+            verbose: Verbosity level
+
+        Returns:
+            True if stats were loaded successfully, False otherwise
+        """
+        # Skip if not VecNormalize
+        if not isinstance(vec_env, VecNormalize):
+            if verbose >= 1:
+                logger.info("VecNormalize not used, skipping stats loading")
+            return True  # Not an error, just not applicable
+
         # Try multiple naming conventions
         possible_paths = [
             # Same directory as model, with _vecnormalize suffix

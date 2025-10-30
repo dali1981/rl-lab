@@ -47,7 +47,7 @@ hyperparameters:
   max_grad_norm: 10
 
 verbose: 1
-tensorboard_log: "./logs/dqn_aggressive"
+tensorboard_log: "${logging.tensorboard.log_dir}"
 
 # Training timesteps - train LONGER
 training:

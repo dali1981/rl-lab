@@ -60,7 +60,7 @@ hyperparameters:
 
 # Training settings specific to this agent
 verbose: 1
-tensorboard_log: "./logs/ppo_transformer"
+tensorboard_log: "${logging.tensorboard.log_dir}"
 
 # Recommended training timesteps for PPO with Transformer
 # Transformers may need more training due to increased capacity

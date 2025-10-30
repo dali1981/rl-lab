@@ -1,0 +1,101 @@
+# Binance Testnet Trading Configuration
+# This configuration is for paper trading on Binance testnet
+# Get API keys from: https://testnet.binance.vision/
+
+testnet:
+  # Binance testnet API configuration
+  api_endpoint: "https://testnet.binance.vision"
+  api_key: "${BINANCE_TESTNET_KEY}"
+  api_secret: "${BINANCE_TESTNET_SECRET}"
+
+  # Connection settings
+  rate_limit: 1200  # requests per minute
+  timeout: 10000  # milliseconds
+  reconnect_delay: 5  # seconds
+  max_reconnect_attempts: 10
+
+# Trading symbols configuration
+symbols:
+  - BTCUSDT
+  # - ETHUSDT
+  # - BNBUSDT
+  # - SOLUSDT
+
+# Dollar volume bar thresholds (USD)
+# Bars are created when this much dollar volume is traded
+dollar_volume_thresholds:
+  BTCUSDT: 1000000  # $1M per bar
+  ETHUSDT: 500000   # $500K per bar
+  BNBUSDT: 100000   # $100K per bar
+  SOLUSDT: 100000   # $100K per bar
+  default: 100000   # Default for other symbols
+
+# Model configuration
+models:
+  # Path to trained models (relative to project root)
+  # vecnormalize: optional, only needed if model was trained with VecNormalize
+  BTCUSDT:
+    path: "checkpoints/PPO_returns_20251028_143659/best_model"
+    vecnormalize: "checkpoints/PPO_returns_20251028_143659/vecnormalize.pkl"  # Optional
+    type: "PPO"
+
+  # ETHUSDT:
+  #   path: "checkpoints/A2C_returns_20251028_143912/best_model"
+  #   vecnormalize: "checkpoints/A2C_returns_20251028_143912/vecnormalize.pkl"  # Optional
+  #   type: "A2C"
+
+# Risk management
+risk:
+  # Portfolio settings
+  initial_balance: 10000  # USD
+  max_position_pct: 0.95  # Max 95% of balance in positions
+
+  # Position sizing
+  max_position_size: 1000  # USD per position
+  min_order_size: 10  # USD minimum order
+
+  # Stop-loss and take-profit
+  max_drawdown: 0.20  # Stop trading if drawdown exceeds 20%
+  stop_loss_pct: 0.05  # Optional: Stop loss per trade (5%)
+  take_profit_pct: 0.10  # Optional: Take profit per trade (10%)
+
+  # Trade limits
+  max_trades_per_hour: 20
+  max_trades_per_day: 100
+  min_holding_period: 60  # seconds (prevent churning)
+
+# Feature engineering
+features:
+  # Rolling window for feature computation
+  lookback_window: 100
+  min_bars_required: 21  # Need 20 for SMA(20) + 1 for current
+
+  # Feature statistics (for normalization)
+  # stats_path: "feature_stats.json"  # Optional: Load saved stats
+
+# Logging and monitoring
+logging:
+  level: "INFO"
+  # file: "logs/trading.log"  # Optional: Log to file
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Dashboard
+dashboard:
+  enabled: true
+  refresh_rate: 1  # seconds
+  show_predictions: true
+  show_features: false  # Set true for debugging
+
+# Safety guards
+safety:
+  # Emergency stop conditions
+  enable_circuit_breaker: true
+  circuit_breaker_drawdown: 0.25  # Stop all trading at 25% drawdown
+
+  # Connection monitoring
+  max_websocket_reconnects: 5
+  websocket_timeout: 30  # seconds
+
+  # Order validation
+  validate_orders: true
+  dry_run: false  # Set true to simulate without actual orders

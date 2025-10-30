@@ -15,7 +15,6 @@ from .portfolio import Portfolio
 
 logger = logging.getLogger(__name__)
 
-ONE_TRADE = True
 
 class Action(IntEnum):
     """Trading actions for discrete action space"""
@@ -53,6 +52,7 @@ class TradingEnv(gym.Env):
         min_holding_period: int = 1,
         hold_closes_position: bool = False,
         price_column: str = "close",
+        one_trade_mode: bool = False,
     ):
         super().__init__()
 
@@ -63,6 +63,8 @@ class TradingEnv(gym.Env):
         self.lookback_window = lookback_window
         self.min_episode_length = min_episode_length
         self.min_holding_period = min_holding_period
+        self.one_trade_mode = one_trade_mode
+        self.position_closed_this_episode = False
         self.initial_balance = initial_balance
         self.commission_rate = commission_rate
         self.slippage_rate = slippage_rate
@@ -172,6 +174,7 @@ class TradingEnv(gym.Env):
         # Log initialization parameters
         logger.info(f"TradingEnv initialized: randomize_start={self.randomize_start}, "
                    f"hold_closes_position={self.hold_closes_position}, "
+                   f"one_trade_mode={self.one_trade_mode}, "
                    f"min_episode_length={self.min_episode_length}, "
                    f"reward_type={self.reward_type}, "
                    f"data_length={len(self.df)}")
@@ -206,6 +209,9 @@ class TradingEnv(gym.Env):
         # Clear history
         for key in self.history:
             self.history[key].clear()
+
+        # Reset ONE_TRADE tracking
+        self.position_closed_this_episode = False
 
         # Get initial observation
         obs = self._get_observation()
@@ -285,6 +291,9 @@ class TradingEnv(gym.Env):
         """Execute trading action"""
         current_price = self._get_current_price()
 
+        # Track position state before action for ONE_TRADE mode
+        had_position = self.portfolio.position.size != 0
+
         if self.discrete_actions:
             # Use Action enum for clarity
             if action == Action.HOLD:
@@ -292,6 +301,9 @@ class TradingEnv(gym.Env):
                 if self.hold_closes_position and self.portfolio.position.size != 0:
                     logger.debug(f"Hold action closing position: size={self.portfolio.position.size:.4f}")
                     self.portfolio.close_position(current_price, self.current_step, self.df)
+                    # Check if position was closed
+                    if had_position and self.portfolio.position.size == 0:
+                        self.position_closed_this_episode = True
                 return
             elif action == Action.BUY:
                 self.portfolio.execute_trade(1.0, current_price, self.current_step, self.df)
@@ -301,6 +313,10 @@ class TradingEnv(gym.Env):
             # Continuous action: -1 to 1
             if abs(action) > 0.1:  # Threshold to avoid tiny trades
                 self.portfolio.execute_trade(action, current_price, self.current_step, self.df)
+
+        # Check if position was closed during execute_trade (for BUY/SELL actions)
+        if had_position and self.portfolio.position.size == 0:
+            self.position_closed_this_episode = True
 
     def close_all_positions(self):
         """
@@ -344,6 +360,10 @@ class TradingEnv(gym.Env):
 
     def _is_terminated(self) -> bool:
         """Check if episode should terminate"""
+        # ONE_TRADE mode: Terminate after first position close
+        if self.one_trade_mode and self.position_closed_this_episode:
+            return True
+
         current_price = self._get_current_price()
         portfolio_value = self.portfolio.get_portfolio_value(current_price)
 

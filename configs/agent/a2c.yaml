@@ -31,7 +31,7 @@ hyperparameters:
   normalize_advantage: false
 
 verbose: 1
-tensorboard_log: "./logs/a2c"
+tensorboard_log: "${logging.tensorboard.log_dir}"
 
 # Recommended training timesteps for A2C
 # A2C typically needs more steps than PPO (less sample efficient)

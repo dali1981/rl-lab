@@ -33,6 +33,38 @@ required_columns:
   - "timestamp"  # Needed for time-based operations
 
 # -----------------------------------------------------------------------------
+# VEC NORMALIZE CONFIGURATION
+# -----------------------------------------------------------------------------
+# Controls observation and reward normalization via VecNormalize wrapper
+# VecNormalize improves training stability by normalizing inputs/outputs
+#
+# When to disable:
+#   - Debugging observation/reward values (want to see raw values)
+#   - Custom normalization already in features
+#   - Transfer learning from non-normalized models
+#
+# Override via CLI:
+#   python train.py env.vec_normalize.enabled=false
+#   python train.py env.vec_normalize.norm_obs=true env.vec_normalize.norm_reward=false
+vec_normalize:
+  # Master switch for VecNormalize wrapper
+  enabled: true
+
+  # Normalize observations using running mean/std
+  # Recommended: true (improves training stability)
+  norm_obs: true
+
+  # Normalize rewards using running mean/std
+  # Recommended: true for stable training, false if reward scale is already good
+  norm_reward: true
+
+  # Clip normalized observations to this range
+  clip_obs: 10.0
+
+  # Clip normalized rewards to this range
+  clip_reward: 10.0
+
+# -----------------------------------------------------------------------------
 # ENVIRONMENT PARAMETERS
 # -----------------------------------------------------------------------------
 environment_params:
@@ -100,3 +132,8 @@ environment_params:
   # true  = Hold action closes any open position (go flat)
   # false = Hold action keeps current position (do nothing)
   hold_closes_position: true
+
+  # ONE_TRADE mode: Terminate episode after first position close
+  # true  = Episode ends when first position is closed (one trade per episode)
+  # false = Normal mode, episode continues until other termination conditions
+  one_trade_mode: false

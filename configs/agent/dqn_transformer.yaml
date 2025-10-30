@@ -58,7 +58,7 @@ hyperparameters:
   max_grad_norm: 10
 
 verbose: 1
-tensorboard_log: "./logs/dqn_transformer"
+tensorboard_log: "${logging.tensorboard.log_dir}"
 
 # Recommended training timesteps for DQN with Transformer
 # DQN needs time for replay buffer filling and exploration

@@ -155,13 +155,16 @@ class BestModelCallback(EvalCallback):
                     if self.verbose >= 1:
                         logger.info(f"Saved best model metadata to {metadata_path}")
 
-                    # CRITICAL: Save VecNormalize stats with best model
+                    # CRITICAL: Save VecNormalize stats with best model (if used)
                     vec_normalize = self.model.get_vec_normalize_env()
                     if vec_normalize is not None:
                         vecnorm_path = Path(self.best_model_save_path) / "vecnormalize.pkl"
                         vec_normalize.save(vecnorm_path)
                         if self.verbose >= 1:
                             logger.info(f"✓ Saved VecNormalize stats to {vecnorm_path}")
+                    else:
+                        if self.verbose >= 2:
+                            logger.debug("VecNormalize not used, skipping stats save")
 
         return result
 

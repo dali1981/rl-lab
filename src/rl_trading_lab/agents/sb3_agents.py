@@ -4,7 +4,7 @@ Provides a unified interface for different RL algorithms.
 """
 
 import os
-from typing import Dict, Any, Optional, Type, Union
+from typing import Dict, Any, Optional, Type, Union, Callable
 from pathlib import Path
 import logging
 import importlib
@@ -27,6 +27,7 @@ from stable_baselines3.common.logger import Logger, configure
 
 from rl_trading_lab.config import RootConfig
 from rl_trading_lab.config.agent import AgentConfig
+from rl_trading_lab.config.env import EnvConfig
 from rl_trading_lab.utils.mlflow_logger import MLflowOutputFormat
 from rl_trading_lab.utils.callbacks import MLflowCallback, TradingMetricsCallback
 from rl_trading_lab.utils.custom_callbacks import CheckpointManagerCallback, BestModelCallback
@@ -56,69 +57,76 @@ CUSTOM_POLICIES = {
 }
 
 
-class TradingAgentWrapper:
+class Trainer:
     """
-    Wrapper for SB3 agents with trading-specific features.
+    RL agent trainer with environment management and training orchestration.
+
+    Responsibilities:
+    - Creates and wraps training/evaluation environments
+    - Configures and trains RL agents
+    - Handles checkpointing and evaluation
+    - Integrates with MLflow for experiment tracking
 
     Features:
-    - Unified interface for different algorithms
+    - Unified interface for different RL algorithms (PPO, A2C, DQN, SAC)
+    - Automatic environment wrapping (Monitor, DummyVecEnv, optional VecNormalize)
     - Built-in evaluation and checkpointing
-    - MLflow integration ready
+    - MLflow and TensorBoard integration
     - Custom callbacks for trading metrics
     """
 
     def __init__(
         self,
         agent_config: AgentConfig,
-        env: gym.Env,
-        eval_env: Optional[gym.Env] = None,
+        env_config: EnvConfig,
+        make_env: Callable[[str], gym.Env],
         save_path: Optional[str] = None,
         device: str = "auto",
     ):
         """
-        Initialize agent wrapper.
+        Initialize the trainer.
 
         Args:
-            agent_config: Agent configuration Pydantic model
-            env: Training environment
-            eval_env: Evaluation environment (optional)
-            save_path: Path to save models
+            agent_config: Agent configuration (algorithm, hyperparameters, etc.)
+            env_config: Environment configuration (vec_normalize, trading params, etc.)
+            make_env: Factory function that creates environments.
+                      Takes mode ('train', 'eval', 'test') and returns gym.Env
+            save_path: Path to save models and checkpoints
             device: Device to use (cpu, cuda, auto)
+
+        Example:
+            ```python
+            def make_env(mode: str) -> gym.Env:
+                df = load_data_for_mode(mode)
+                return TradingEnv(df=df, ...)
+
+            trainer = Trainer(
+                agent_config=config.agent,
+                env_config=config.env,
+                make_env=make_env,
+            )
+            ```
         """
         self.config = agent_config
+        self.env_config = env_config
+        self.make_env = make_env
         self.save_path = Path(save_path) if save_path else Path("checkpoints")
         self.device = device
 
-        # Wrap environments with Monitor -> DummyVecEnv -> VecNormalize for better training stability
-        # Monitor tracks episode statistics (required for proper callback logging)
-        monitored_env = Monitor(env)
-        train_env_func = lambda e=monitored_env: e  # Proper closure
-        self.env = DummyVecEnv([train_env_func])
+        # Create training environment
+        logger.info("Creating training environment...")
+        train_env = self.make_env('train')
+        self.env = self._wrap_environment(train_env, is_eval=False)
 
-        # Wrap with VecNormalize to normalize observations and rewards
-        self.env = VecNormalize(
-            self.env,
-            norm_obs=True,      # Normalize observations
-            norm_reward=True,   # Normalize rewards (critical for stability)
-            clip_obs=10.0,      # Clip observations
-            clip_reward=10.0,   # Clip rewards
-            gamma=agent_config.hyperparameters.gamma,
-        )
+        # Create evaluation environment
+        logger.info("Creating evaluation environment...")
+        eval_env = self.make_env('eval')
+        self.eval_env = self._wrap_environment(eval_env, is_eval=True)
 
-        if eval_env is not None:
-            # Wrap eval environment similarly, but don't normalize rewards during eval
-            monitored_eval_env = Monitor(eval_env)
-            eval_env_func = lambda e=monitored_eval_env: e  # Proper closure
-            self.eval_env = DummyVecEnv([eval_env_func])
-            self.eval_env = VecNormalize(
-                self.eval_env,
-                norm_obs=True,
-                norm_reward=False,  # Don't normalize rewards during evaluation
-                clip_obs=10.0,
-                training=False,     # Disable updates to running stats during eval
-            )
-        else:
-            self.eval_env = None
+        # Store VecNormalize state
+        vec_normalize_config = self.env_config.vec_normalize
+        self.vec_normalize_enabled = vec_normalize_config.enabled
+        self.vec_normalize_config = vec_normalize_config
 
         # Get algorithm class
         algo_name = agent_config.algorithm.split(".")[-1]
@@ -136,7 +144,41 @@ class TradingAgentWrapper:
         # Setup custom logger for MLflow and TensorBoard integration
         self._setup_logger()
 
-        logger.info(f"Initialized {algo_name} agent with Monitor + VecNormalize wrappers")
+        if self.vec_normalize_enabled:
+            logger.info(f"Initialized {algo_name} trainer with Monitor + VecNormalize wrappers")
+        else:
+            logger.info(f"Initialized {algo_name} trainer with Monitor wrapper (VecNormalize disabled)")
+
+    def _wrap_environment(self, env: gym.Env, is_eval: bool = False) -> Union[DummyVecEnv, VecNormalize]:
+        """
+        Wrap environment with Monitor, DummyVecEnv, and optionally VecNormalize.
+
+        Args:
+            env: Raw environment to wrap
+            is_eval: Whether this is an evaluation environment
+
+        Returns:
+            Wrapped environment ready for training/evaluation
+        """
+        # Wrap with Monitor for episode statistics
+        monitored_env = Monitor(env)
+        env_func = lambda e=monitored_env: e
+        vec_env = DummyVecEnv([env_func])
+
+        # Conditionally wrap with VecNormalize
+        vec_normalize_config = self.env_config.vec_normalize
+        if vec_normalize_config.enabled:
+            vec_env = VecNormalize(
+                vec_env,
+                norm_obs=vec_normalize_config.norm_obs,
+                norm_reward=False if is_eval else vec_normalize_config.norm_reward,
+                clip_obs=vec_normalize_config.clip_obs,
+                clip_reward=vec_normalize_config.clip_reward if not is_eval else 10.0,
+                gamma=self.config.hyperparameters.gamma,
+                training=not is_eval,  # Disable updates during eval
+            )
+
+        return vec_env
 
     def _create_agent(self) -> BaseAlgorithm:
         """Create the SB3 agent"""
@@ -292,9 +334,16 @@ class TradingAgentWrapper:
         )
         callback_list.append(mlflow_callback)
 
-        # Add trading metrics callback
-        trading_callback = TradingMetricsCallback(verbose=self.config.verbose)
-        callback_list.append(trading_callback)
+        # Add trading metrics callback (only in multi-trade mode)
+        # In one_trade_mode, each episode is a single trade, so win/loss tracking
+        # is redundant with episode rewards
+        one_trade_mode = self.env_config.environment_params.one_trade_mode
+        if not one_trade_mode:
+            trading_callback = TradingMetricsCallback(verbose=self.config.verbose)
+            callback_list.append(trading_callback)
+            logger.info("TradingMetricsCallback enabled (multi-trade mode)")
+        else:
+            logger.info("TradingMetricsCallback disabled (one_trade_mode=True)")
 
         # Combine callbacks
         combined_callback = CallbackList(callback_list) if callback_list else None
@@ -447,29 +496,3 @@ class TradingAgentWrapper:
         return wrapper
 
 
-def create_agent_from_config(
-    config: RootConfig,
-    env: gym.Env,
-    eval_env: Optional[gym.Env] = None,
-) -> TradingAgentWrapper:
-    """
-    Factory function to create agent from config.
-
-    Args:
-        config: Full Pydantic configuration
-        env: Training environment
-        eval_env: Evaluation environment
-
-    Returns:
-        TradingAgentWrapper instance
-    """
-    # Create wrapper
-    wrapper = TradingAgentWrapper(
-        agent_config=config.agent,
-        env=env,
-        eval_env=eval_env,
-        save_path=config.training.save_path,
-        device=config.experiment.device,
-    )
-
-    return wrapper

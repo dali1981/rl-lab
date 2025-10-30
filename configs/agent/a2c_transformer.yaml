@@ -53,7 +53,7 @@ hyperparameters:
 
 # Training settings specific to this agent
 verbose: 1
-tensorboard_log: "./logs/a2c_transformer"
+tensorboard_log: "${logging.tensorboard.log_dir}"
 
 # Recommended training timesteps for A2C with Transformer
 # A2C typically needs more steps than PPO; transformer may need even more

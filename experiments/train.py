@@ -15,6 +15,7 @@ from pathlib import Path
 import logging
 from datetime import datetime
 import subprocess
+from typing import Callable, Dict, Any, List, Tuple
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -29,9 +30,13 @@ from rich.table import Table
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from rl_trading_lab.config import RootConfig, load_config
-from rl_trading_lab.environment.trading_env import TradingEnv
-from rl_trading_lab.agents.sb3_agents import create_agent_from_config
-from rl_trading_lab.utils.data_processor import DataProcessor
+from rl_trading_lab.environment import TradingEnv, create_make_env
+from rl_trading_lab.agents.sb3_agents import Trainer
+
+# Constants
+POSITION_EPSILON = 1e-3  # Threshold for considering a position as non-zero
+TRADING_DAYS_PER_YEAR = 252  # Standard trading days for Sharpe calculation
+GIT_HASH_SHORT_LENGTH = 8
 
 # Setup logging and console
 logging.basicConfig(level=logging.INFO)
@@ -39,44 +44,166 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-def setup_mlflow(config: RootConfig):
-    """Setup MLflow tracking"""
-    if not config.logging.mlflow.enabled:
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def unwrap_vectorized_env(vec_env):
+    """
+    Unwrap the base environment from a vectorized environment.
+
+    Handles both VecNormalize and DummyVecEnv wrappers.
+
+    Args:
+        vec_env: Vectorized environment (DummyVecEnv or VecNormalize)
+
+    Returns:
+        Unwrapped TradingEnv instance
+    """
+    if hasattr(vec_env, 'venv'):
+        # VecNormalize wrapper
+        return vec_env.venv.envs[0]
+    else:
+        # DummyVecEnv
+        return vec_env.envs[0]
+
+
+def extract_vec_env_step_result(step_result) -> Tuple[Any, float, bool, bool, Dict]:
+    """
+    Extract step results from vectorized environment, handling both gym and gymnasium APIs.
+
+    Args:
+        step_result: Result tuple from vec_env.step()
+
+    Returns:
+        Tuple of (obs, reward, done, truncated, info) normalized to gymnasium format
+    """
+    if len(step_result) == 4:
+        # Old gym API (VecNormalize)
+        obs, reward, done, info = step_result
+        truncated = False
+    else:
+        # New gymnasium API
+        obs, reward, done, truncated, info = step_result
+
+    # Extract from vectorized format
+    if isinstance(info, list):
+        info = info[0]
+    if isinstance(done, np.ndarray):
+        done = done[0]
+    if isinstance(truncated, (np.ndarray, bool)):
+        truncated = truncated[0] if isinstance(truncated, np.ndarray) else truncated
+
+    return obs, reward, done, truncated, info
+
+
+def count_trades(positions: List[float]) -> int:
+    """
+    Count the number of actual trades from position history.
+
+    A trade occurs when:
+    1. Opening a position from flat (0 -> long/short)
+    2. Reversing direction (long -> short or short -> long)
+
+    Args:
+        positions: List of position sizes over time
+
+    Returns:
+        Total number of trades
+    """
+    if len(positions) == 0:
+        return 0
+
+    total_trades = 0
+
+    # First step: trade if we open a position
+    if abs(positions[0]) > POSITION_EPSILON:
+        total_trades += 1
+
+    # Subsequent steps: detect position changes
+    for i in range(1, len(positions)):
+        prev_pos = positions[i-1]
+        curr_pos = positions[i]
+
+        prev_is_flat = abs(prev_pos) < POSITION_EPSILON
+        curr_is_flat = abs(curr_pos) < POSITION_EPSILON
+
+        # Opening position from flat
+        if prev_is_flat and not curr_is_flat:
+            total_trades += 1
+        # Reversing direction (both non-flat but opposite signs)
+        elif not prev_is_flat and not curr_is_flat:
+            if np.sign(prev_pos) != np.sign(curr_pos):
+                total_trades += 1
+
+    return total_trades
+
+
+def calculate_sharpe_ratio(returns: np.ndarray, annualization_factor: int = TRADING_DAYS_PER_YEAR) -> float:
+    """
+    Calculate annualized Sharpe ratio from returns.
+
+    Args:
+        returns: Array of period returns
+        annualization_factor: Number of periods per year (252 for daily trading)
+
+    Returns:
+        Annualized Sharpe ratio
+    """
+    if len(returns) == 0:
+        return 0.0
+
+    mean_return = returns.mean()
+    std_return = returns.std()
+
+    if std_return < 1e-8:
+        return 0.0
+
+    return mean_return / std_return * np.sqrt(annualization_factor)
+
+
+# ============================================================================
+# Main Functions
+# ============================================================================
+
+def setup_mlflow(
+    mlflow_config,
+    run_name: str,
+    full_config_dict: Dict[str, Any],
+    base_params: Dict[str, Any]
+):
+    """
+    Setup MLflow tracking.
+
+    Args:
+        mlflow_config: MLflow-specific configuration section
+        run_name: Name for this experiment run
+        full_config_dict: Complete config dictionary for artifact logging
+        base_params: Key parameters to log (agent name, env params, etc.)
+    """
+    if not mlflow_config.enabled:
         return
 
     # Set tracking URI
-    mlflow.set_tracking_uri(config.logging.mlflow.tracking_uri)
+    mlflow.set_tracking_uri(mlflow_config.tracking_uri)
 
     # Create or set experiment
-    mlflow.set_experiment(config.logging.mlflow.experiment_name)
+    mlflow.set_experiment(mlflow_config.experiment_name)
 
     # Start run
-    mlflow.start_run(run_name=config.experiment.run_name)
+    mlflow.start_run(run_name=run_name)
 
-    # Log parameters
-    mlflow.log_params({
-        "agent": config.agent.name,
-        "environment.reward_type": config.env.environment_params.reward_type,
-        "environment.initial_balance": config.env.environment_params.initial_balance,
-        "environment.commission_rate": config.env.environment_params.commission_rate,
-        "environment.lookback_window": config.env.environment_params.lookback_window,
-        "training.total_timesteps": config.training.total_timesteps,
-    })
-
-    # Log hyperparameters
-    for key, value in config.agent.hyperparameters.model_dump().items():
-        if not isinstance(value, (dict, list)):
-            mlflow.log_param(f"agent.{key}", value)
+    # Log base parameters
+    mlflow.log_params(base_params)
 
     # Log full config as artifact for reproducibility
-    config_dict = config.model_dump()
-    mlflow.log_dict(config_dict, "config.yaml")
+    mlflow.log_dict(full_config_dict, "config.yaml")
 
     # Log all individual config files for complete reproducibility
     configs_dir = Path(__file__).parent.parent / "configs"
     if configs_dir.exists():
         mlflow.log_artifacts(str(configs_dir), "configs")
-        console.print(f"[green]✓[/green] All config files logged ({len(list(configs_dir.rglob('*.yaml')))} YAML files)")
+        logger.info(f"All config files logged ({len(list(configs_dir.rglob('*.yaml')))} YAML files)")
 
     # Log Hydra CLI overrides
     try:
@@ -84,7 +211,7 @@ def setup_mlflow(config: RootConfig):
         cli_overrides = hydra_cfg.overrides.task
         if cli_overrides:
             mlflow.log_dict({"cli_overrides": cli_overrides}, "hydra/cli_overrides.yaml")
-            console.print(f"[green]✓[/green] Hydra overrides logged: {cli_overrides}")
+            logger.info(f"Hydra overrides logged: {cli_overrides}")
     except Exception as e:
         logger.debug(f"Could not log Hydra overrides: {e}")
 
@@ -96,186 +223,139 @@ def setup_mlflow(config: RootConfig):
             stderr=subprocess.DEVNULL
         ).decode("utf-8").strip()
         mlflow.log_param("git_commit", git_hash)
-        console.print(f"[green]✓[/green] Git commit logged: {git_hash[:8]}")
+        logger.info(f"Git commit logged: {git_hash[:8]}")
     except Exception as e:
         logger.debug(f"Could not log git commit: {e}")
 
-    console.print(f"[green]✓[/green] MLflow tracking enabled: {config.logging.mlflow.tracking_uri}")
-    console.print(f"[green]✓[/green] Full config logged to MLflow")
+    logger.info(f"MLflow tracking enabled: {mlflow_config.tracking_uri}")
+    logger.info("Full config logged to MLflow")
 
 
-def create_environments(config: RootConfig):
-    """Create training and evaluation environments"""
-    console.print("\n[bold]Loading Data...[/bold]")
-
-    # Initialize data processor
-    data_processor = DataProcessor(
-        data_path=config.data.train_data_path,
-        observation_config=config.observation,
-        feature_engineering_config=config.feature_engineering,
-        val_split=config.data.val_split,
-        test_split=config.data.test_split,
-    )
-
-    # Load and process data
-    train_df, val_df, test_df, observation_features = data_processor.process()
-
-    # Validate required columns exist
-    for col in config.env.required_columns:
-        if col not in train_df.columns:
-            raise ValueError(
-                f"Required column '{col}' not found in data. "
-                f"Available columns: {sorted(train_df.columns.tolist())}"
-            )
-
-    console.print(f"[green]✓[/green] Loaded data: "
-                 f"Train={len(train_df)} bars, Val={len(val_df)} bars, Test={len(test_df)} bars")
-    console.print(f"[green]✓[/green] Observation features: {len(observation_features)} selected")
-
-    # Extract environment parameters from config
-    env_params = config.env.environment_params
-
-    # Create training environment with randomization enabled
-    train_env = TradingEnv(
-        df=train_df,
-        lookback_window=env_params.lookback_window,
-        initial_balance=env_params.initial_balance,
-        commission_rate=env_params.commission_rate,
-        slippage_rate=env_params.slippage_rate,
-        reward_type=env_params.reward_type,
-        discrete_actions=env_params.discrete_actions,
-        max_position_pct=env_params.max_position_pct,
-        features_to_use=observation_features,
-        randomize_start=env_params.randomize_start,
-        min_episode_length=env_params.min_episode_length,
-        hold_closes_position=env_params.hold_closes_position,
-        price_column=config.env.price_column,
-    )
-
-    # Create evaluation environment (no randomization for consistency)
-    eval_env = TradingEnv(
-        df=val_df,
-        lookback_window=env_params.lookback_window,
-        initial_balance=env_params.initial_balance,
-        commission_rate=env_params.commission_rate,
-        slippage_rate=env_params.slippage_rate,
-        reward_type=env_params.reward_type,
-        discrete_actions=env_params.discrete_actions,
-        max_position_pct=env_params.max_position_pct,
-        features_to_use=observation_features,
-        randomize_start=False,  # Disable for consistent evaluation
-        min_episode_length=env_params.min_episode_length,
-        hold_closes_position=env_params.hold_closes_position,
-        price_column=config.env.price_column,
-    )
-
-    # Create test environment (no randomization for consistent evaluation)
-    test_env = TradingEnv(
-        df=test_df,
-        lookback_window=env_params.lookback_window,
-        initial_balance=env_params.initial_balance,
-        commission_rate=env_params.commission_rate,
-        slippage_rate=env_params.slippage_rate,
-        reward_type=env_params.reward_type,
-        discrete_actions=env_params.discrete_actions,
-        max_position_pct=env_params.max_position_pct,
-        features_to_use=observation_features,
-        randomize_start=False,  # Disable for consistent evaluation
-        min_episode_length=env_params.min_episode_length,
-        hold_closes_position=env_params.hold_closes_position,
-        price_column=config.env.price_column,
-    )
-
-    return train_env, eval_env, test_env
-
-
-def wrap_test_env_for_evaluation(test_env, agent):
+def _prepare_mlflow_params(config: RootConfig) -> Dict[str, Any]:
     """
-    Wrap test environment to match training setup.
-
-    CRITICAL: Agent was trained with VecNormalize, so it expects normalized observations.
-    We must wrap the test environment the same way and copy the normalization statistics
-    from training to ensure consistent observation scaling.
+    Prepare MLflow parameters from config.
 
     Args:
-        test_env: Raw TradingEnv instance
-        agent: Trained agent wrapper (has agent.env which is VecNormalize)
+        config: Full training configuration
+
+    Returns:
+        Dictionary of parameters to log to MLflow
+    """
+    mlflow_params = {
+        "agent": config.agent.name,
+        "environment.reward_type": config.env.environment_params.reward_type,
+        "environment.initial_balance": config.env.environment_params.initial_balance,
+        "environment.commission_rate": config.env.environment_params.commission_rate,
+        "environment.lookback_window": config.env.environment_params.lookback_window,
+        "training.total_timesteps": config.training.total_timesteps,
+    }
+
+    # Add agent hyperparameters
+    for key, value in config.agent.hyperparameters.model_dump().items():
+        if not isinstance(value, (dict, list)):
+            mlflow_params[f"agent.{key}"] = value
+
+    return mlflow_params
+
+
+def wrap_test_env_for_evaluation(make_env, trainer: Trainer):
+    """
+    Create and wrap test environment to match training setup.
+
+    CRITICAL: If trainer was trained with VecNormalize, we must wrap the test environment
+    the same way and copy the normalization statistics from training to ensure
+    consistent observation scaling.
+
+    Args:
+        make_env: Factory function to create environments
+        trainer: Trained Trainer instance
 
     Returns:
         Properly wrapped test environment
     """
-    console.print("[yellow]Wrapping test environment with VecNormalize...[/yellow]")
+    # Create test environment
+    test_env = make_env('test')
 
-    # Wrap in DummyVecEnv to make it vectorized
-    test_env_func = lambda e=test_env: e
-    test_vec_env = DummyVecEnv([test_env_func])
+    # Use trainer's wrapping method to ensure consistency
+    test_vec_env = trainer._wrap_environment(test_env, is_eval=True)
 
-    # Wrap with VecNormalize (same as training, but training=False)
-    test_vec_env = VecNormalize(
-        test_vec_env,
-        norm_obs=True,       # Normalize observations (CRITICAL)
-        norm_reward=False,   # Don't normalize rewards during eval
-        clip_obs=10.0,
-        training=False,      # Don't update running statistics
-    )
+    # Check if VecNormalize was used during training
+    if trainer.vec_normalize_enabled:
+        logger.info("Wrapping test environment with VecNormalize...")
 
-    # CRITICAL: Copy normalization statistics from training environment
-    # Without this, the test env would use different normalization!
-    if hasattr(agent.env, 'obs_rms'):
-        test_vec_env.obs_rms = agent.env.obs_rms
-        console.print("[green]✓[/green] Copied observation normalization stats from training")
+        # CRITICAL: Copy normalization statistics from training environment
+        # Without this, the test env would use different normalization!
+        if hasattr(trainer.env, 'obs_rms'):
+            test_vec_env.obs_rms = trainer.env.obs_rms
+            logger.info("Copied observation normalization stats from training")
+        else:
+            logger.warning("Could not copy normalization stats!")
+
+        if hasattr(trainer.env, 'ret_rms'):
+            test_vec_env.ret_rms = trainer.env.ret_rms
     else:
-        console.print("[red]Warning: Could not copy normalization stats![/red]")
-
-    if hasattr(agent.env, 'ret_rms'):
-        test_vec_env.ret_rms = agent.env.ret_rms
+        logger.info("VecNormalize not used during training - using DummyVecEnv only")
 
     return test_vec_env
 
 
-def train_agent(config: RootConfig, train_env, eval_env):
-    """Train the RL agent"""
-    console.print(f"\n[bold]Training {config.agent.name} Agent...[/bold]")
+def train_agent(
+    agent_name: str,
+    trainer: Trainer,
+    total_timesteps: int,
+    eval_freq: int,
+    n_eval_episodes: int,
+    save_freq: int,
+    progress_bar: bool
+) -> Tuple[Trainer, Dict[str, Any]]:
+    """
+    Train the RL agent.
 
-    # Create agent
-    agent = create_agent_from_config(
-        config=config,
-        env=train_env,
-        eval_env=eval_env,
-    )
+    Args:
+        agent_name: Name of the agent (for logging)
+        trainer: Trainer instance
+        total_timesteps: Total training timesteps
+        eval_freq: Evaluation frequency
+        n_eval_episodes: Number of episodes for evaluation
+        save_freq: Checkpoint save frequency
+        progress_bar: Whether to show progress bar
+
+    Returns:
+        Tuple of (trained trainer, training metrics)
+    """
+    logger.info(f"Training {agent_name} agent...")
 
     # Train
-    metrics = agent.train(
-        total_timesteps=config.training.total_timesteps,
-        eval_freq=config.training.eval_freq,
-        n_eval_episodes=config.training.n_eval_episodes,
-        save_freq=config.training.save_freq,
-        progress_bar=config.logging.console.progress_bar,
+    metrics = trainer.train(
+        total_timesteps=total_timesteps,
+        eval_freq=eval_freq,
+        n_eval_episodes=n_eval_episodes,
+        save_freq=save_freq,
+        progress_bar=progress_bar,
     )
 
-    console.print(f"[green]✓[/green] Training completed")
+    logger.info("Training completed")
 
-    return agent, metrics
+    return trainer, metrics
 
 
-def evaluate_final_performance(agent, test_env, n_episodes=10):
+def evaluate_final_performance(trainer: Trainer, make_env, n_episodes=10):
     """Evaluate final model performance"""
-    console.print("\n[bold]Evaluating Final Performance...[/bold]")
+    logger.info("Evaluating final performance...")
 
-    # Wrap test environment to match training setup (critical for correct evaluation)
-    test_env_wrapped = wrap_test_env_for_evaluation(test_env, agent)
+    # Create and wrap test environment to match training setup (critical for correct evaluation)
+    test_env_wrapped = wrap_test_env_for_evaluation(make_env, trainer)
 
     # Evaluate using wrapped environment
-    metrics = agent.evaluate(
+    metrics = trainer.evaluate(
         env=test_env_wrapped,
         n_episodes=n_episodes,
         deterministic=True,
     )
 
-    # Add debugging: print individual episode rewards to investigate std_reward=0
-    console.print(f"[yellow]Debug: Episode rewards stats[/yellow]")
-    console.print(f"  Mean: {metrics.get('mean_reward', 'N/A')}")
-    console.print(f"  Std: {metrics.get('std_reward', 'N/A')}")
+    # Log episode rewards stats at debug level
+    logger.debug(f"Episode rewards - Mean: {metrics.get('mean_reward', 'N/A')}, "
+                f"Std: {metrics.get('std_reward', 'N/A')}")
 
     # Create results table
     table = Table(title="Test Performance Metrics")
@@ -293,14 +373,18 @@ def evaluate_final_performance(agent, test_env, n_episodes=10):
     return metrics
 
 
-def run_backtest(agent, test_env):
-    """Run full backtest and collect detailed metrics"""
-    console.print("\n[bold]Running Backtest...[/bold]")
+def _collect_backtest_trajectory(trainer: Trainer, vec_env) -> Dict[str, List]:
+    """
+    Run episode and collect trajectory data.
 
-    # Wrap test environment to match training setup
-    test_env_wrapped = wrap_test_env_for_evaluation(test_env, agent)
+    Args:
+        trainer: Trained agent
+        vec_env: Vectorized environment
 
-    obs = test_env_wrapped.reset()
+    Returns:
+        Dictionary containing actions, rewards, positions, balances, and step_returns
+    """
+    obs = vec_env.reset()
     done = False
     truncated = False
 
@@ -308,42 +392,23 @@ def run_backtest(agent, test_env):
     rewards = []
     positions = []
     balances = []
-
-    # Track actual returns (not Sharpe rewards)
     step_returns = []
 
-    step_count = 0
     while not done and not truncated:
-        # Get action from agent
-        action, _ = agent.predict(obs, deterministic=True)
+        # Get action from trainer
+        action, _ = trainer.predict(obs, deterministic=True)
 
-        # Step environment (VecNormalize returns 4 values: obs, reward, done, info)
-        step_result = test_env_wrapped.step(action)
-        if len(step_result) == 4:
-            # Old gym API (VecNormalize)
-            obs, reward, done, info = step_result
-            truncated = False  # Not available in old API
-        else:
-            # New gymnasium API
-            obs, reward, done, truncated, info = step_result
-
-        # Extract info from vectorized environment
-        if isinstance(info, list):
-            info = info[0]
-        if isinstance(done, np.ndarray):
-            done = done[0]
-        if isinstance(truncated, (np.ndarray, bool)):
-            truncated = truncated[0] if isinstance(truncated, np.ndarray) else truncated
+        # Step environment and extract results using helper
+        step_result = vec_env.step(action)
+        obs, reward, done, truncated, info = extract_vec_env_step_result(step_result)
 
         # Collect data
         actions.append(action)
         rewards.append(reward)
         positions.append(info.get('position', 0))
 
-        # Get portfolio value from unwrapped environment
-        # Since we wrapped with VecNormalize, need to access the base env
-        unwrapped_env = test_env_wrapped.venv.envs[0]
-        portfolio_value = unwrapped_env._get_portfolio_value()
+        # Get portfolio value from info dict (already computed by environment)
+        portfolio_value = info.get('portfolio_value', 0)
         balances.append(portfolio_value)
 
         # Calculate step return for Sharpe calculation
@@ -351,83 +416,120 @@ def run_backtest(agent, test_env):
             step_return = (balances[-1] - balances[-2]) / balances[-2]
             step_returns.append(step_return)
 
-        step_count += 1
+    return {
+        'actions': actions,
+        'rewards': rewards,
+        'positions': positions,
+        'balances': balances,
+        'step_returns': step_returns,
+    }
+
+
+def _calculate_final_metrics(vec_env, trajectory: Dict[str, List]) -> Dict[str, float]:
+    """
+    Calculate final backtest metrics including P&L and Sharpe ratio.
+
+    Args:
+        vec_env: Vectorized environment (to access unwrapped env)
+        trajectory: Collected trajectory data
+
+    Returns:
+        Dictionary of final metrics
+    """
+    # Unwrap environment using helper
+    unwrapped_env = unwrap_vectorized_env(vec_env)
 
     # Close any remaining open positions to realize all P&L
-    unwrapped_env = test_env_wrapped.venv.envs[0]
     unwrapped_env.close_all_positions()
 
     # Get final portfolio value after closing positions
-    final_portfolio_value = unwrapped_env._get_portfolio_value()
+    current_price = unwrapped_env._get_current_price()
+    final_portfolio_value = unwrapped_env.portfolio.get_portfolio_value(current_price)
 
-    # Calculate final metrics
-    initial_balance = test_env_wrapped.venv.envs[0].initial_balance
+    # Calculate final return
+    initial_balance = unwrapped_env.initial_balance
     final_return = (final_portfolio_value - initial_balance) / initial_balance
 
-    # FIXED: Calculate Sharpe from actual returns, not from Sharpe rewards!
-    # The rewards are Sharpe approximations, we need to use actual portfolio returns
-    if len(step_returns) > 0:
-        returns_array = np.array(step_returns)
-        sharpe = returns_array.mean() / (returns_array.std() + 1e-8) * np.sqrt(252)
-    else:
-        sharpe = 0.0
+    # Calculate Sharpe from actual returns (not from Sharpe rewards)
+    step_returns = np.array(trajectory['step_returns'])
+    sharpe = calculate_sharpe_ratio(step_returns)
 
-    # Trading frequency analysis - count ACTUAL trades, not action signals
-    # A trade occurs when position changes from flat, or reverses direction
-    total_trades = 0
-    for i in range(len(positions)):
-        if i == 0:
-            # First step: trade if we open a position
-            if abs(positions[i]) > 0.001:
-                total_trades += 1
-        else:
-            # Subsequent steps: trade if position sign changes or goes from 0 to non-zero
-            prev_pos = positions[i-1]
-            curr_pos = positions[i]
+    # Count actual trades using helper function
+    total_trades = count_trades(trajectory['positions'])
+    trade_frequency = total_trades / len(trajectory['actions']) if len(trajectory['actions']) > 0 else 0
 
-            # Check if we went from flat to positioned
-            if abs(prev_pos) < 0.001 and abs(curr_pos) > 0.001:
-                total_trades += 1
-            # Check if we reversed direction (long to short or short to long)
-            elif abs(prev_pos) > 0.001 and abs(curr_pos) > 0.001:
-                if np.sign(prev_pos) != np.sign(curr_pos):
-                    total_trades += 1
+    return {
+        'final_return': final_return,
+        'sharpe_ratio': sharpe,
+        'num_trades': total_trades,
+        'trade_frequency': trade_frequency,
+    }
 
-    trade_frequency = total_trades / len(actions) if len(actions) > 0 else 0
 
-    console.print(f"[green]✓[/green] Backtest completed")
-    console.print(f"  Steps: {step_count}")
-    console.print(f"  Final Return: {final_return:.2%}")
-    console.print(f"  Sharpe Ratio (from returns): {sharpe:.2f}")
-    console.print(f"  Total Trades: {total_trades}")
-    console.print(f"  Trade Frequency: {trade_frequency:.1%}")
+def _log_backtest_results(metrics: Dict[str, float], trajectory: Dict[str, List]):
+    """
+    Log backtest results to console and MLflow.
 
-    # Debugging: Show reward statistics
-    console.print(f"[yellow]Debug: Reward statistics[/yellow]")
-    console.print(f"  Mean reward: {np.mean(rewards):.4f}")
-    console.print(f"  Std reward: {np.std(rewards):.4f}")
-    console.print(f"  Min/Max reward: {np.min(rewards):.4f} / {np.max(rewards):.4f}")
+    Args:
+        metrics: Calculated performance metrics
+        trajectory: Collected trajectory data
+    """
+    # Log backtest summary
+    logger.info(f"Backtest completed - Steps: {len(trajectory['actions'])}, "
+               f"Final Return: {metrics['final_return']:.2%}, "
+               f"Sharpe: {metrics['sharpe_ratio']:.2f}, "
+               f"Trades: {metrics['num_trades']}, "
+               f"Trade Frequency: {metrics['trade_frequency']:.1%}")
+
+    # Log reward statistics at debug level
+    rewards = np.array(trajectory['rewards'])
+    logger.debug(f"Reward statistics - Mean: {rewards.mean():.4f}, Std: {rewards.std():.4f}, "
+                f"Min/Max: {rewards.min():.4f}/{rewards.max():.4f}")
 
     # Log backtest metrics to MLflow
     # Note: Training metrics are logged via callbacks during training.
-    # These backtest metrics are computed AFTER training completes on the test set,
-    # so they're logged here as a final summary.
+    # These backtest metrics are computed AFTER training completes on the test set.
     if mlflow.active_run():
         mlflow.log_metrics({
-            "backtest/final_return": final_return,
-            "backtest/sharpe_ratio": sharpe,
-            "backtest/num_trades": total_trades,
-            "backtest/trade_frequency": trade_frequency,
+            "backtest/final_return": metrics['final_return'],
+            "backtest/sharpe_ratio": metrics['sharpe_ratio'],
+            "backtest/num_trades": metrics['num_trades'],
+            "backtest/trade_frequency": metrics['trade_frequency'],
         })
 
+
+def run_backtest(trainer: Trainer, make_env: Callable) -> Dict[str, Any]:
+    """
+    Run full backtest and collect detailed metrics.
+
+    Args:
+        trainer: Trained Trainer instance
+        make_env: Factory function to create environments
+
+    Returns:
+        Dictionary containing backtest results including trajectory and metrics
+    """
+    logger.info("Running backtest...")
+
+    # Create and wrap test environment to match training setup
+    vec_env = wrap_test_env_for_evaluation(make_env, trainer)
+
+    # Collect trajectory data
+    trajectory = _collect_backtest_trajectory(trainer, vec_env)
+
+    # Calculate final metrics
+    metrics = _calculate_final_metrics(vec_env, trajectory)
+
+    # Log results
+    _log_backtest_results(metrics, trajectory)
+
+    # Return combined results
     return {
-        "final_return": final_return,
-        "sharpe_ratio": sharpe,
-        "actions": actions,
-        "positions": positions,
-        "balances": balances,
-        "step_returns": step_returns,
-        "trade_frequency": trade_frequency,
+        **metrics,
+        'actions': trajectory['actions'],
+        'positions': trajectory['positions'],
+        'balances': trajectory['balances'],
+        'step_returns': trajectory['step_returns'],
     }
 
 
@@ -443,29 +545,66 @@ def main(cfg: DictConfig):
     console.print(f"Device: [cyan]{config.experiment.device}[/cyan]\n")
 
     # Setup MLflow
-    setup_mlflow(config)
+    mlflow_params = _prepare_mlflow_params(config)
+    setup_mlflow(
+        mlflow_config=config.logging.mlflow,
+        run_name=config.experiment.run_name,
+        full_config_dict=config.model_dump(),
+        base_params=mlflow_params
+    )
 
     try:
-        # Create environments
-        train_env, eval_env, test_env = create_environments(config)
+        # Create make_env factory (encapsulates data loading)
+        make_env = create_make_env(
+            data_path=config.data.train_data_path,
+            observation_config=config.observation,
+            feature_engineering_config=config.feature_engineering,
+            env_config=config.env,
+            val_split=config.data.val_split,
+            test_split=config.data.test_split,
+        )
 
-        # Train agent
-        agent, train_metrics = train_agent(config, train_env, eval_env)
+        # Create trainer (creates and wraps environments internally)
+        trainer = Trainer(
+            agent_config=config.agent,
+            env_config=config.env,
+            make_env=make_env,
+            save_path=config.training.save_path,
+            device=config.experiment.device,
+        )
 
-        # Evaluate on test set
-        test_metrics = evaluate_final_performance(agent, test_env)
+        # Train agent with only needed parameters
+        trainer, train_metrics = train_agent(
+            agent_name=config.agent.name,
+            trainer=trainer,
+            total_timesteps=config.training.total_timesteps,
+            eval_freq=config.training.eval_freq,
+            n_eval_episodes=config.training.n_eval_episodes,
+            save_freq=config.training.save_freq,
+            progress_bar=config.logging.console.progress_bar,
+        )
 
-        # Run detailed backtest
-        backtest_results = run_backtest(agent, test_env)
+        # Check if one_trade_mode is enabled
+        one_trade_mode = config.env.environment_params.one_trade_mode
 
-        # Log final test metrics to MLflow
-        # Note: Training metrics are logged via callbacks (MLflowCallback, TradingMetricsCallback)
-        # throughout training. These are final evaluation metrics computed AFTER training completes.
-        if mlflow.active_run():
-            # Add test/ prefix to distinguish from training metrics
-            test_metrics_prefixed = {f"test/{k}": v for k, v in test_metrics.items()}
-            mlflow.log_metrics(test_metrics_prefixed)
-            mlflow.log_dict(backtest_results, "backtest_results.json")
+        if one_trade_mode:
+            logger.warning("one_trade_mode is enabled - skipping final metrics evaluation")
+            logger.warning("In one_trade_mode, each episode is a single trade, so training metrics are sufficient")
+        else:
+            # Evaluate on test set (only for multi-trade mode)
+            test_metrics = evaluate_final_performance(trainer, make_env)
+
+            # Run detailed backtest (only for multi-trade mode)
+            backtest_results = run_backtest(trainer, make_env)
+
+            # Log final test metrics to MLflow
+            # Note: Training metrics are logged via callbacks (MLflowCallback, TradingMetricsCallback)
+            # throughout training. These are final evaluation metrics computed AFTER training completes.
+            if mlflow.active_run():
+                # Add test/ prefix to distinguish from training metrics
+                test_metrics_prefixed = {f"test/{k}": v for k, v in test_metrics.items()}
+                mlflow.log_metrics(test_metrics_prefixed)
+                mlflow.log_dict(backtest_results, "backtest_results.json")
 
         console.print("\n[bold green]Training Pipeline Complete![/bold green]")
 

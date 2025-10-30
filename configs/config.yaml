@@ -49,7 +49,7 @@ logging:
     tracking_uri: file:./mlruns
     experiment_name: ${experiment.name}
   tensorboard:
-    enabled: false
+    enabled: true
     log_dir: logs/${experiment.run_name}
   console:
     verbose: true

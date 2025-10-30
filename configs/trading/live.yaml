@@ -1,0 +1,102 @@
+# Live Trading Configuration
+# WARNING: This configuration is for LIVE trading with REAL money
+# Use testnet.yaml for paper trading first!
+
+trading:
+  mode: "live"  # or "testnet" or "paper"
+
+  # Binance production API
+  api_endpoint: "https://api.binance.com"
+  api_key: "${BINANCE_API_KEY}"
+  api_secret: "${BINANCE_API_SECRET}"
+
+  # Connection settings
+  rate_limit: 1200
+  timeout: 10000
+  reconnect_delay: 5
+  max_reconnect_attempts: 10
+
+# Trading symbols
+symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - BNBUSDT
+
+# Dollar volume bar thresholds
+dollar_volume_thresholds:
+  BTCUSDT: 1000000
+  ETHUSDT: 500000
+  BNBUSDT: 100000
+  default: 100000
+
+# Models
+# vecnormalize: optional, only needed if model was trained with VecNormalize
+models:
+  BTCUSDT:
+    path: "checkpoints/PPO_returns_20251028_143659/best_model"
+    vecnormalize: "checkpoints/PPO_returns_20251028_143659/vecnormalize.pkl"  # Optional
+    type: "PPO"
+
+  ETHUSDT:
+    path: "checkpoints/A2C_returns_20251028_143912/best_model"
+    vecnormalize: "checkpoints/A2C_returns_20251028_143912/vecnormalize.pkl"  # Optional
+    type: "A2C"
+
+# Risk management (CONSERVATIVE for live trading)
+risk:
+  initial_balance: 10000
+  max_position_pct: 0.50  # Max 50% in positions (conservative)
+
+  max_position_size: 500  # Smaller positions for live
+  min_order_size: 10
+
+  max_drawdown: 0.15  # More aggressive stop at 15%
+  stop_loss_pct: 0.03  # Tighter stop loss (3%)
+  take_profit_pct: 0.06  # Tighter take profit (6%)
+
+  max_trades_per_hour: 10  # Fewer trades
+  max_trades_per_day: 50
+  min_holding_period: 120  # Longer holding period (2 minutes)
+
+# Feature engineering
+features:
+  lookback_window: 100
+  min_bars_required: 21
+
+# Logging
+logging:
+  level: "INFO"
+  file: "logs/live_trading.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Alert on important events
+  alerts:
+    enabled: true
+    # email: "your-email@example.com"  # Optional: Email alerts
+    # slack_webhook: "${SLACK_WEBHOOK}"  # Optional: Slack alerts
+
+# Dashboard
+dashboard:
+  enabled: true
+  refresh_rate: 1
+  show_predictions: true
+  show_features: false
+
+# Safety guards (STRICT for live trading)
+safety:
+  enable_circuit_breaker: true
+  circuit_breaker_drawdown: 0.20  # Stop at 20% drawdown
+
+  max_websocket_reconnects: 3  # Fail fast on connection issues
+  websocket_timeout: 20
+
+  validate_orders: true
+  dry_run: false
+
+  # Additional live trading safeguards
+  require_confirmation: false  # Set true to manually confirm each trade
+  max_slippage_pct: 0.002  # Reject orders with >0.2% slippage
+
+  # Health checks
+  heartbeat_interval: 60  # seconds
+  min_balance_threshold: 100  # Stop if balance drops below this

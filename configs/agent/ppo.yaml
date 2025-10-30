@@ -41,7 +41,7 @@ hyperparameters:
 
 # Training settings specific to this agent
 verbose: 1
-tensorboard_log: "./logs/ppo"
+tensorboard_log: "${logging.tensorboard.log_dir}"
 
 # Recommended training timesteps for PPO
 # PPO is sample-efficient for on-policy algorithms
