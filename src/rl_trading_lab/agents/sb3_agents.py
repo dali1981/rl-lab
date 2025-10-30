@@ -29,7 +29,7 @@ from rl_trading_lab.config import RootConfig
 from rl_trading_lab.config.agent import AgentConfig
 from rl_trading_lab.config.env import EnvConfig
 from rl_trading_lab.utils.mlflow_logger import MLflowOutputFormat
-from rl_trading_lab.utils.callbacks import MLflowCallback, TradingMetricsCallback
+from rl_trading_lab.utils.callbacks import TradingMetricsCallback
 from rl_trading_lab.utils.custom_callbacks import CheckpointManagerCallback, BestModelCallback
 from rl_trading_lab.utils.checkpoint_manager import CheckpointManager
 
@@ -120,6 +120,7 @@ class Trainer:
 
         # Create evaluation environment
         logger.info("Creating evaluation environment...")
+        logger.info(f"Env config one_trade_mode: {self.env_config.environment_params.one_trade_mode}")
         eval_env = self.make_env('eval')
         self.eval_env = self._wrap_environment(eval_env, is_eval=True)
 
@@ -327,13 +328,6 @@ class Trainer:
         if callbacks:
             callback_list.extend(callbacks)
 
-        # Add MLflow logging callback
-        mlflow_callback = MLflowCallback(
-            log_freq=max(eval_freq // 10, 100) if eval_freq else 1000,
-            verbose=self.config.verbose,
-        )
-        callback_list.append(mlflow_callback)
-
         # Add trading metrics callback (only in multi-trade mode)
         # In one_trade_mode, each episode is a single trade, so win/loss tracking
         # is redundant with episode rewards
@@ -354,6 +348,12 @@ class Trainer:
             total_timesteps=total_timesteps,
             callback=combined_callback,
             progress_bar=progress_bar,
+            log_interval=2,  # Log every 2 rollouts/updates
+            # Recommended values:
+            # - log_interval=1: Log every rollout (PPO/A2C collect data in rollouts)
+            # - log_interval=2: Log every 2 rollouts (good balance, ~4k steps with n_steps=2048)
+            # - log_interval=4: Log every 4 rollouts
+            # - log_interval=100: Log every 100 environment steps (for off-policy like DQN/SAC)
         )
 
         # Save final model

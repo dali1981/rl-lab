@@ -103,12 +103,14 @@ def create_make_env(
             randomize = env_params.randomize_start
         elif mode == 'eval':
             df = val_df
-            randomize = False  # Disable for consistent evaluation
+            randomize = True  # Enable to get proper variance in eval metrics
         elif mode == 'test':
             df = test_df
-            randomize = False  # Disable for consistent evaluation
+            randomize = True  # Enable to assess performance across diverse market conditions
         else:
             raise ValueError(f"Unknown mode: {mode}. Must be 'train', 'eval', or 'test'")
+
+        logger.info(f"Creating {mode} environment: one_trade_mode={env_params.one_trade_mode}, data_length={len(df)}")
 
         return TradingEnv(
             df=df,
