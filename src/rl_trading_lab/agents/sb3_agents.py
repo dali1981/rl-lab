@@ -25,6 +25,19 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.logger import Logger, configure
 
+# Import MaskablePPO from sb3-contrib
+try:
+    from sb3_contrib import MaskablePPO
+    from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
+    from sb3_contrib.common.maskable.evaluation import evaluate_policy as evaluate_policy_maskable
+    MASKABLE_AVAILABLE = True
+except ImportError:
+    logger.warning("sb3-contrib not installed. MaskablePPO will not be available. Install with: pip install sb3-contrib")
+    MaskablePPO = None
+    MaskableActorCriticPolicy = None
+    evaluate_policy_maskable = None
+    MASKABLE_AVAILABLE = False
+
 from rl_trading_lab.config import RootConfig
 from rl_trading_lab.config.agent import AgentConfig
 from rl_trading_lab.config.env import EnvConfig
@@ -50,6 +63,10 @@ ALGORITHMS = {
     "DQN": DQN,
     "SAC": SAC,
 }
+
+# Add MaskablePPO if available
+if MASKABLE_AVAILABLE:
+    ALGORITHMS["MaskablePPO"] = MaskablePPO
 
 # Custom policy mapping
 CUSTOM_POLICIES = {
@@ -219,6 +236,9 @@ class Trainer:
             policy = CUSTOM_POLICIES[policy]
             logger.info(f"Using custom policy: {policy.__name__}")
 
+        # Filter out None values from hyperparams (e.g., use_sde not supported by MaskablePPO)
+        hyperparams = {k: v for k, v in hyperparams.items() if v is not None}
+
         # Create agent
         agent = self.algo_class(
             policy=policy,
@@ -386,14 +406,25 @@ class Trainer:
         """
         logger.info(f"Evaluating agent for {n_episodes} episodes...")
 
-        # Evaluate
-        episode_rewards, episode_lengths = evaluate_policy(
-            self.agent,
-            env,
-            n_eval_episodes=n_episodes,
-            deterministic=deterministic,
-            return_episode_rewards=True,
-        )
+        # Use maskable evaluation if agent is MaskablePPO
+        if MASKABLE_AVAILABLE and isinstance(self.agent, MaskablePPO):
+            logger.info("Using evaluate_policy_maskable for MaskablePPO")
+            episode_rewards, episode_lengths = evaluate_policy_maskable(
+                self.agent,
+                env,
+                n_eval_episodes=n_episodes,
+                deterministic=deterministic,
+                return_episode_rewards=True,
+            )
+        else:
+            # Use standard evaluation for other algorithms
+            episode_rewards, episode_lengths = evaluate_policy(
+                self.agent,
+                env,
+                n_eval_episodes=n_episodes,
+                deterministic=deterministic,
+                return_episode_rewards=True,
+            )
 
         # Debugging: Print individual episode rewards to investigate std_reward=0
         logger.info(f"DEBUG - Individual episode rewards: {episode_rewards}")
@@ -425,6 +456,7 @@ class Trainer:
         self,
         observation: np.ndarray,
         deterministic: bool = True,
+        action_masks: Optional[np.ndarray] = None,
     ):
         """
         Predict action for given observation.
@@ -432,11 +464,21 @@ class Trainer:
         Args:
             observation: Environment observation
             deterministic: Use deterministic action
+            action_masks: Optional boolean array of valid actions for MaskablePPO.
+                         Shape should be (n_actions,) with True for valid actions.
 
         Returns:
             action, state (if recurrent policy)
         """
-        return self.agent.predict(observation, deterministic=deterministic)
+        # Check if agent supports action masking (MaskablePPO)
+        if action_masks is not None and MASKABLE_AVAILABLE and isinstance(self.agent, MaskablePPO):
+            return self.agent.predict(
+                observation,
+                deterministic=deterministic,
+                action_masks=action_masks
+            )
+        else:
+            return self.agent.predict(observation, deterministic=deterministic)
 
     def save(self, path: Union[str, Path]):
         """Save the model"""

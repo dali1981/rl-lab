@@ -29,7 +29,7 @@ data:
 training:
   # Total training timesteps (environment steps, not episodes)
   # Default can be overridden by agent-specific configs (agent/*.yaml)
-  total_timesteps: 1_000_000  # PPO: 100k, A2C: 500k, DQN: 200k recommended
+  total_timesteps: 10_000_000  # PPO: 100k, A2C: 500k, DQN: 200k recommended
 
   # Evaluation during training
   eval_freq: 5_000  # Evaluate every N timesteps

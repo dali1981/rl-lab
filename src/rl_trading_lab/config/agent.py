@@ -65,8 +65,8 @@ class PPOHyperparameters(BaseModel):
 
     # Other settings
     normalize_advantage: bool
-    use_sde: bool
-    sde_sample_freq: int
+    use_sde: Optional[bool] = None  # Not supported by MaskablePPO
+    sde_sample_freq: Optional[int] = None  # Not supported by MaskablePPO
 
 
 class PPOConfig(BaseAgentConfig):
@@ -167,5 +167,13 @@ class DQNConfig(BaseAgentConfig):
     training: TrainingParams
 
 
+class MaskablePPOConfig(BaseAgentConfig):
+    """MaskablePPO agent configuration (from sb3-contrib)."""
+
+    name: Literal["MaskablePPO"] = "MaskablePPO"
+    hyperparameters: PPOHyperparameters  # Same hyperparameters as PPO
+    training: TrainingParams
+
+
 # Discriminated union of all agent configs
-AgentConfig = Union[PPOConfig, A2CConfig, DQNConfig]
+AgentConfig = Union[PPOConfig, A2CConfig, DQNConfig, MaskablePPOConfig]

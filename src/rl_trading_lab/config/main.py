@@ -4,7 +4,7 @@ from typing import Union
 
 from pydantic import BaseModel, Field
 
-from rl_trading_lab.config.agent import A2CConfig, AgentConfig, DQNConfig, PPOConfig
+from rl_trading_lab.config.agent import A2CConfig, AgentConfig, DQNConfig, MaskablePPOConfig, PPOConfig
 from rl_trading_lab.config.data import DataConfig
 from rl_trading_lab.config.env import EnvConfig
 from rl_trading_lab.config.experiment import ExperimentConfig
@@ -28,5 +28,5 @@ class RootConfig(BaseModel):
     env: EnvConfig
     observation: ObservationConfig
     feature_engineering: FeatureEngineeringConfig
-    # Discriminated union - will be one of PPOConfig, A2CConfig, or DQNConfig
-    agent: Union[PPOConfig, A2CConfig, DQNConfig] = Field(..., discriminator="name")
+    # Discriminated union - will be one of PPOConfig, A2CConfig, DQNConfig, or MaskablePPOConfig
+    agent: Union[PPOConfig, A2CConfig, DQNConfig, MaskablePPOConfig] = Field(..., discriminator="name")

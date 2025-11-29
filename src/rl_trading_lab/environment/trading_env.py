@@ -222,23 +222,13 @@ class TradingEnv(gym.Env):
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute one step in the environment"""
 
-        # Remap invalid actions to HOLD
-        # This ensures agent always gets valid behavior without needing special masking support
-        position_sign = np.sign(self.portfolio.position.size)
-        original_action = action
-
-        if position_sign > 0 and action == Action.BUY:
-            # Cannot BUY when already LONG -> remap to HOLD
-            action = Action.HOLD
-        elif position_sign < 0 and action == Action.SELL:
-            # Cannot SELL when already SHORT -> remap to HOLD
-            action = Action.HOLD
-
         # Store previous balance for reward calculation
         current_price = self._get_current_price()
         prev_balance = self.portfolio.get_portfolio_value(current_price)
 
-        # Execute the (potentially remapped) action
+        # Execute action
+        # Note: MaskablePPO will prevent invalid actions from being sampled
+        # If used without masking support, invalid actions will be silently ignored by portfolio
         self._execute_action(action)
 
         # Move to next step
@@ -249,11 +239,11 @@ class TradingEnv(gym.Env):
         current_balance = self.portfolio.get_portfolio_value(current_price)
         reward = self._calculate_reward(prev_balance, current_balance)
 
-        # Update history (store original action agent tried to take)
+        # Update history
         self.history['portfolio_value'].append(current_balance)
         self.history['returns'].append((current_balance - prev_balance) / prev_balance)
         self.history['positions'].append(self.portfolio.position.size)
-        self.history['actions'].append(original_action)  # Log what agent tried to do
+        self.history['actions'].append(action)
         self.history['rewards'].append(reward)
 
         # Check if episode is done
@@ -392,21 +382,37 @@ class TradingEnv(gym.Env):
 
         return False
 
+    def action_masks(self) -> np.ndarray:
+        """
+        Get boolean mask of valid actions for current state.
+
+        Required by MaskablePPO from sb3-contrib. Returns array where:
+        - True = action is valid
+        - False = action is invalid
+
+        Returns:
+            Boolean array of shape (n_actions,) indicating valid actions
+        """
+        position_sign = np.sign(self.portfolio.position.size)
+
+        if position_sign == 0:  # Flat (no position)
+            # All actions valid: HOLD, BUY, SELL
+            return np.array([True, True, True], dtype=bool)
+        elif position_sign > 0:  # LONG position
+            # Can HOLD or SELL, cannot BUY
+            return np.array([True, False, True], dtype=bool)
+        else:  # SHORT position (position_sign < 0)
+            # Can HOLD or BUY, cannot SELL
+            return np.array([True, True, False], dtype=bool)
+
     def _get_info(self) -> Dict[str, Any]:
         """Get info dictionary"""
         current_price = self._get_current_price()
         portfolio_value = self.portfolio.get_portfolio_value(current_price)
 
-        # Calculate action mask based on current position
-        # Prevents invalid actions: BUY while LONG, SELL while SHORT
-        position_sign = np.sign(self.portfolio.position.size)
-
-        if position_sign == 0:  # Flat (no position)
-            action_mask = np.array([1, 1, 1], dtype=np.int8)  # All actions valid: HOLD, BUY, SELL
-        elif position_sign > 0:  # LONG position
-            action_mask = np.array([1, 0, 1], dtype=np.int8)  # Can HOLD or SELL, cannot BUY
-        else:  # SHORT position (position_sign < 0)
-            action_mask = np.array([1, 1, 0], dtype=np.int8)  # Can HOLD or BUY, cannot SELL
+        # Get action mask for info dict (for compatibility/debugging)
+        action_mask_bool = self.action_masks()
+        action_mask = action_mask_bool.astype(np.int8)
 
         info = {
             'step': self.current_step,
@@ -415,7 +421,7 @@ class TradingEnv(gym.Env):
             'position': self.portfolio.position.size,
             'total_return': (portfolio_value - self.initial_balance) / self.initial_balance,
             'num_trades': self.portfolio.num_trades,
-            'action_mask': action_mask,  # SB3-compatible action masking
+            'action_mask': action_mask,  # For compatibility/debugging
         }
 
         # Add performance metrics if we have history
