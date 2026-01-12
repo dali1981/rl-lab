@@ -1,105 +1,60 @@
-# 🚀 RL Trading Lab
+# RL Trading Lab
 
-**A comprehensive reinforcement learning framework for cryptocurrency trading with live deployment capabilities.**
+A research and engineering framework for **reinforcement learning-based trading systems**, focused on reproducible experiments, custom environment design, and controlled deployment.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
----
-
-## 📑 Table of Contents
-
-### Getting Started
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Quick Start](#quick-start)
-  - [Installation](#1-installation)
-  - [Data Preparation](#2-data-preparation)
-  - [Training Your First Model](#3-train-your-first-model)
-  - [Viewing Results](#4-view-results)
-
-### Core Features
-- [Training Features](#training-features)
-  - [Environment Capabilities](#environment-capabilities)
-  - [RL Algorithms](#rl-algorithms-via-stable-baselines3)
-  - [Technical Indicators](#technical-indicators)
-  - [Reward Functions](#reward-functions)
-- [Live Trading](#live-trading)
-  - [Quick Start Guide](#live-trading-quick-start)
-  - [Safety Features](#safety-features)
-  - [Deployment Workflow](#deployment-workflow)
-- [Checkpoint Management](#checkpoint-management)
-  - [Config Embedding](#training-configuration-embedding)
-  - [Model Discovery](#model-discovery)
-  - [Config Retrieval](#configuration-retrieval)
-
-### Guides & Documentation
-- [Project Structure](#project-structure)
-- [Configuration System](#configuration-system)
-- [Example Experiments](#example-experiments)
-- [Monitoring & Debugging](#monitoring--debugging)
-- [Integration with Data Pipeline](#integration-with-data-pipeline)
-
-### Advanced Topics
-- [Live Trading Deep Dive](#live-trading-documentation)
-- [Custom Indicators](#adding-custom-indicators)
-- [Hyperparameter Optimization](#hyperparameter-optimization)
-- [Production Deployment](#production-deployment)
-
-### Reference
-- [Troubleshooting](#troubleshooting)
-- [CLI Commands](#cli-commands)
-- [API Reference](#api-reference)
-- [Resources](#resources)
+This repository demonstrates how I structure RL projects for real-world constraints:
+- Custom environments tailored to trading data
+- Config-driven experimentation (Hydra + MLflow)
+- Transparent metrics and checkpoints
+- Optional live / paper trading with safety guards
 
 ---
 
-## Overview
+## What this project is for
 
-RL Trading Lab is a production-ready framework that combines:
-- **Kedro** for data pipeline management (tick data → features)
-- **Stable-Baselines3** for RL algorithm training
-- **Hydra** for configuration management
-- **MLflow** for experiment tracking and model registry
-- **Binance Integration** for live trading deployment
+This project is used to:
+- Design custom RL environments for proprietary market data
+- Train and benchmark agents using Stable-Baselines3
+- Run reproducible experiments with Hydra and MLflow
+- Prototype execution logic with explicit risk controls
 
-**Key Differentiators:**
-- ✅ **Self-contained checkpoints** - Training configs embedded in model files
-- ✅ **Live trading ready** - Deploy to Binance testnet/mainnet
-- ✅ **Offline capable** - No MLflow server needed for deployment
-- ✅ **Production tested** - Safety guards, circuit breakers, risk management
+### What this project is NOT
+- Not a turnkey trading bot
+- Not financial advice
+- Not a promise of profitability
 
 ---
 
-## Architecture
+## 60-second smoke test
 
+Run a minimal training loop to verify installation:
+
+```bash
+git clone https://github.com/dali1981/rl-lab.git
+cd rl-lab
+uv sync
+
+uv run python experiments/train.py \
+  training.total_timesteps=1000
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     DATA PIPELINE                                │
-│  Raw Ticks → Dollar Volume Bars → Technical Indicators           │
-│             → Z-Score Normalization → ML-Ready Features          │
-│                                                                   │
-│  Tools: Kedro, MinIO, Delta Lake                                 │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                     RL TRAINING LAB                              │
-│  Features → Trading Environment → RL Agents → Trained Models     │
-│                                                                   │
-│  Algorithms: PPO, A2C, DQN, SAC                                  │
-│  Tracking: MLflow, TensorBoard                                   │
-│  Management: Hydra configs, CheckpointManager                    │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                     LIVE TRADING                                 │
-│  WebSocket Stream → Dollar Bars → Features → Model → Orders     │
-│                                                                   │
-│  Safety: Circuit breakers, Rate limits, Risk management          │
-│  Platform: Binance Testnet/Mainnet                              │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+Expected results:
+- Training starts successfully
+- Metrics logged to `mlruns/`
+- Checkpoint written to `checkpoints/`
+
+---
+
+## Documentation
+
+- [Architecture overview](docs/architecture.md)
+- [Configuration & experiments](docs/CONFIGURATION_GUIDE.md)
+- [Logging guide](docs/LOGGING_GUIDE.md)
+- [Live trading (optional)](LIVE_TRADING_GUIDE.md)
 
 ---
 
@@ -109,7 +64,8 @@ RL Trading Lab is a production-ready framework that combines:
 
 ```bash
 # Clone repository
-cd /Users/mohamedali/trading_project/rl-trading-lab
+git clone https://github.com/dali1981/rl-lab.git
+cd rl-lab
 
 # Install dependencies with UV
 uv sync
@@ -843,12 +799,9 @@ uv run python examples/live_trading_example.py trade --model <path>
 
 ---
 
-**Happy Trading! 🚀📈**
-
-**Remember:** Start simple, test thoroughly, measure everything, and iterate based on results!
+**Remember:** Start simple, test thoroughly, measure everything, and iterate based on results.
 
 ---
 
-**Last Updated:** 2025-11-05
-**Version:** 2.0.0
-**Status:** Production Ready ✅
+**Last Updated:** 2026-01-12
+**Version:** 2.1.0
