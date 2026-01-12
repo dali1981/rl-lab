@@ -3,29 +3,29 @@
 The system is structured around clear separation of concerns:
 
 ```
-Market Data
-│
-▼
+   Market Data
+        │
+        ▼
 ┌──────────────┐
 │ Environment  │  ← state, actions, reward
 └──────────────┘
-│
-▼
+        │
+        ▼
 ┌──────────────┐
 │ RL Agent     │  ← PPO / DQN / SAC (SB3)
 └──────────────┘
-│
-▼
+        │
+        ▼
 ┌──────────────┐
 │ Trainer      │  ← rollout, optimization
 └──────────────┘
-│
-├── Metrics → MLflow
-├── Configs → Hydra
-└── Checkpoints
+        │
+        ├── Metrics → MLflow
+        ├── Configs → Hydra
+        └── Checkpoints
 
-(Optional)
-▼
+    (Optional)
+        ▼
 ┌──────────────┐
 │ Execution    │  ← paper / live trading with guards
 └──────────────┘

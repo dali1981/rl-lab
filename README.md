@@ -36,7 +36,6 @@ To avoid ambiguity:
 
 Any execution or “live trading” components exist to demonstrate **system integration patterns**, not to provide a production-ready trading system.
 
----
 
 ## Typical client engagements
 
@@ -50,7 +49,6 @@ When adapted for client work, this architecture is used for:
 
 Clients typically receive a **scoped, simplified subset** of this codebase, tailored to their objectives and data.
 
----
 
 ## Quick verification (60-second smoke test)
 
@@ -58,23 +56,24 @@ Run a minimal training loop to verify the setup:
 
 ```bash
 git clone https://github.com/dali1981/rl-lab.git
-cd rl-lab
-uv sync
+```
 
+```bash
+cd rl-lab; uv sync
+```
+```bash
 uv run python experiments/train.py \
   trainer.max_steps=1000 \
   env.dataset=sample
- ```
+```
  
 Expected outcome:
-
-	•	training loop starts successfully
-	•	metrics are logged to mlruns/
-	•	a checkpoint is written to checkpoints/
+- training loop starts successfully
+- metrics are logged to `mlruns/`
+- a checkpoint is written to `checkpoints/`
 
 This confirms the system is wired correctly.
 
----
 
 ## Repository structure (high-level)
 
@@ -95,7 +94,6 @@ This confirms the system is wired correctly.
 └── LICENSE
 ```
 
----
 
 ## Documentation
 
@@ -103,8 +101,6 @@ This confirms the system is wired correctly.
 - [Configuration & experiments](docs/configuration.md)
 - [Training & checkpoints](docs/training.md)
 - [Execution patterns (optional)](docs/execution.md)
-
----
 
 ## License
 
