@@ -112,7 +112,7 @@ def main(
     # Step 2: Create bars
     print_header("Step 2: Creating Dollar Volume Bars")
     try:
-        bar_processor = BarProcessor(dollar_volume_threshold=dollar_volume_threshold)
+        bar_processor = BarProcessor(symbol=symbol, threshold=dollar_volume_threshold)
         bars_df = bar_processor.process(trades_df)
 
         console.print(f"[green]✓ Created {len(bars_df)} bars[/green]")

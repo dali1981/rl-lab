@@ -82,6 +82,8 @@ class Trainer:
         make_env: Callable[[str], gym.Env],
         save_path: Optional[str] = None,
         device: str = "auto",
+        observation_config: Optional[Dict[str, Any]] = None,
+        feature_engineering_config: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize the trainer.
@@ -93,6 +95,8 @@ class Trainer:
                       Takes mode ('train', 'eval', 'test') and returns gym.Env
             save_path: Path to save models and checkpoints
             device: Device to use (cpu, cuda, auto)
+            observation_config: Observation configuration (for checkpoint metadata)
+            feature_engineering_config: Feature engineering configuration (for checkpoint metadata)
 
         Example:
             ```python
@@ -104,11 +108,15 @@ class Trainer:
                 agent_config=config.agent,
                 env_config=config.env,
                 make_env=make_env,
+                observation_config=config.observation,
+                feature_engineering_config=config.feature_engineering,
             )
             ```
         """
         self.config = agent_config
         self.env_config = env_config
+        self.observation_config = observation_config
+        self.feature_engineering_config = feature_engineering_config
         self.make_env = make_env
         self.save_path = Path(save_path) if save_path else Path("checkpoints")
         self.device = device
@@ -296,6 +304,15 @@ class Trainer:
         # Add evaluation callback if eval environment provided
         # Use BestModelCallback to save VecNormalize stats with best model
         if self.eval_env and eval_freq:
+            # Prepare metadata with training configs (serialize Pydantic objects to dicts)
+            metadata = {'agent_config': self.config.name}
+            if self.observation_config:
+                metadata['observation_config'] = self.observation_config.model_dump()
+            if self.feature_engineering_config:
+                metadata['feature_engineering_config'] = self.feature_engineering_config.model_dump()
+            if self.env_config:
+                metadata['env_config'] = self.env_config.model_dump()
+
             eval_callback = BestModelCallback(
                 self.eval_env,
                 best_model_save_path=str(self.save_path / "best_model"),
@@ -305,13 +322,22 @@ class Trainer:
                 deterministic=True,
                 render=False,
                 verbose=self.config.verbose,
-                metadata={'agent_config': self.config.name},
+                metadata=metadata,
             )
             callback_list.append(eval_callback)
 
         # Add checkpoint callback with metadata
         # Use CheckpointManagerCallback to save metadata with each checkpoint
         if save_freq:
+            # Prepare metadata (same as for BestModelCallback)
+            checkpoint_metadata = {'agent_config': self.config.name}
+            if self.observation_config:
+                checkpoint_metadata['observation_config'] = self.observation_config.model_dump()
+            if self.feature_engineering_config:
+                checkpoint_metadata['feature_engineering_config'] = self.feature_engineering_config.model_dump()
+            if self.env_config:
+                checkpoint_metadata['env_config'] = self.env_config.model_dump()
+
             checkpoint_callback = CheckpointManagerCallback(
                 save_freq=save_freq,
                 save_path=str(self.save_path / "checkpoints"),
@@ -319,7 +345,7 @@ class Trainer:
                 save_replay_buffer=True,
                 save_vecnormalize=True,
                 verbose=self.config.verbose,
-                metadata={'agent_config': self.config.name},
+                metadata=checkpoint_metadata,
             )
             callback_list.append(checkpoint_callback)
 

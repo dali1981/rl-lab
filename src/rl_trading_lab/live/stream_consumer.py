@@ -99,7 +99,8 @@ class StreamConsumer:
         for symbol in symbols:
             threshold = self.dollar_volume_thresholds.get(symbol, default_threshold)
             self.bar_processors[symbol] = BarProcessor(
-                dollar_volume_threshold=threshold
+                symbol=symbol,
+                threshold=threshold
             )
 
         # Connection management
@@ -202,7 +203,7 @@ class StreamConsumer:
         # Get threshold for this symbol
         threshold = self.dollar_volume_thresholds.get(
             symbol,
-            self.bar_processors[symbol].dollar_volume_threshold
+            self.bar_processors[symbol].threshold
         )
 
         # Check if we should create a bar

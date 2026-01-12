@@ -180,22 +180,35 @@ class ModelInferenceEngine:
             logger.error(f"Error during prediction: {e}")
             raise
 
-    def _prepare_observation(self, features: pd.DataFrame) -> np.ndarray:
+    def _prepare_observation(self, features) -> np.ndarray:
         """
-        Prepare observation array from features DataFrame.
+        Prepare observation array from features DataFrame or numpy array.
 
         Args:
-            features: DataFrame with features
+            features: DataFrame with features OR numpy array of feature values
 
         Returns:
             Numpy array ready for model input
         """
-        # Drop non-feature columns
-        non_feature_cols = ["timestamp", "symbol"]
-        feature_cols = [col for col in features.columns if col not in non_feature_cols]
+        # Handle both DataFrame and numpy array inputs
+        if isinstance(features, pd.DataFrame):
+            # Drop non-feature columns
+            non_feature_cols = ["timestamp", "symbol"]
+            feature_cols = [col for col in features.columns if col not in non_feature_cols]
 
-        # Extract feature values
-        obs = features[feature_cols].values
+            # Extract feature values
+            obs = features[feature_cols].values
+        elif isinstance(features, np.ndarray):
+            # Already a numpy array, use directly
+            obs = features
+        else:
+            # Try to convert to numpy array
+            try:
+                obs = np.array(features)
+            except Exception as e:
+                raise TypeError(
+                    f"features must be DataFrame or numpy array, got {type(features)}"
+                ) from e
 
         # Ensure 2D shape (batch_size, features)
         if obs.ndim == 1:

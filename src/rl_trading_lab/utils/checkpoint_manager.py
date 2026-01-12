@@ -250,6 +250,241 @@ class CheckpointManager:
 
         return checkpoints
 
+    @staticmethod
+    def discover_all_checkpoints(
+        base_dir: Path = Path("checkpoints"),
+    ) -> List[Dict[str, Any]]:
+        """
+        Discover all trained models in the checkpoints directory.
+
+        Searches for all best_model.zip files and returns information about each.
+
+        Args:
+            base_dir: Base checkpoints directory (default: "checkpoints")
+
+        Returns:
+            List of dicts with model information:
+            {
+                'path': Path to model.zip,
+                'vecnormalize_path': Path to vecnormalize.pkl or None,
+                'checkpoint_dir': Parent checkpoint directory,
+                'model_type': Algorithm type (PPO/A2C/DQN),
+                'metadata': Metadata dict or None,
+                'observation_dim': Number of features expected (from metadata),
+                'config_files': Dict of config file paths if available,
+            }
+
+        Example:
+            >>> from rl_trading_lab.utils import CheckpointManager
+            >>> models = CheckpointManager.discover_all_checkpoints()
+            >>> for model in models:
+            ...     print(f"{model['model_type']}: {model['checkpoint_dir'].name}")
+            ...     print(f"  Features: {model['observation_dim']}")
+        """
+        base_dir = Path(base_dir)
+
+        if not base_dir.exists():
+            logger.warning(f"Checkpoints directory not found: {base_dir}")
+            return []
+
+        discovered = []
+
+        # Search for all best_model.zip files
+        for model_file in base_dir.glob("**/best_model.zip"):
+            checkpoint_dir = model_file.parent.parent
+            vecnorm_file = model_file.parent / "vecnormalize.pkl"
+
+            # Determine model type from directory name
+            dir_name = checkpoint_dir.name
+            if "PPO" in dir_name:
+                model_type = "PPO"
+            elif "A2C" in dir_name:
+                model_type = "A2C"
+            elif "DQN" in dir_name:
+                model_type = "DQN"
+            elif "SAC" in dir_name:
+                model_type = "SAC"
+            elif "TD3" in dir_name:
+                model_type = "TD3"
+            else:
+                model_type = "Unknown"
+
+            # Load metadata
+            manager = CheckpointManager()
+            metadata = manager._load_metadata(model_file)
+
+            # Extract observation dimension from metadata
+            observation_dim = None
+            if metadata and 'observation_space' in metadata:
+                obs_shape = metadata['observation_space'].get('shape', [])
+                observation_dim = obs_shape[0] if obs_shape else None
+
+            # Check for config files in checkpoint directory
+            config_files = {}
+            for config_file in checkpoint_dir.glob("config/*.yaml"):
+                config_files[config_file.stem] = config_file
+
+            discovered.append({
+                'path': model_file,
+                'vecnormalize_path': vecnorm_file if vecnorm_file.exists() else None,
+                'checkpoint_dir': checkpoint_dir,
+                'model_type': model_type,
+                'metadata': metadata,
+                'observation_dim': observation_dim,
+                'config_files': config_files,
+            })
+
+        # Sort by modification time (newest first)
+        discovered.sort(key=lambda x: x['path'].stat().st_mtime, reverse=True)
+
+        return discovered
+
+    @staticmethod
+    def get_model_info(checkpoint_path: Path) -> Dict[str, Any]:
+        """
+        Get detailed information about a specific checkpoint.
+
+        Args:
+            checkpoint_path: Path to model.zip file
+
+        Returns:
+            Dict with model information including configs
+
+        Example:
+            >>> info = CheckpointManager.get_model_info(Path("checkpoints/PPO.../best_model.zip"))
+            >>> print(f"Features: {info['observation_dim']}")
+            >>> print(f"Configs: {list(info['config_files'].keys())}")
+        """
+        checkpoint_path = Path(checkpoint_path)
+        manager = CheckpointManager()
+
+        metadata = manager._load_metadata(checkpoint_path)
+
+        # Extract key information
+        observation_dim = None
+        if metadata and 'observation_space' in metadata:
+            obs_shape = metadata['observation_space'].get('shape', [])
+            observation_dim = obs_shape[0] if obs_shape else None
+
+        # Look for config files
+        checkpoint_dir = checkpoint_path.parent.parent
+        config_files = {}
+        config_dir = checkpoint_dir / "config"
+        if config_dir.exists():
+            for config_file in config_dir.glob("*.yaml"):
+                config_files[config_file.stem] = config_file
+
+        return {
+            'path': checkpoint_path,
+            'metadata': metadata,
+            'observation_dim': observation_dim,
+            'config_files': config_files,
+        }
+
+    @staticmethod
+    def get_training_config(checkpoint_path: Path) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve training configuration for a checkpoint.
+
+        Tries multiple sources in priority order:
+        1. Embedded config in checkpoint metadata (offline-capable)
+        2. Query MLflow using run_id (requires MLflow connection)
+        3. Load from config/ directory in checkpoint folder
+
+        Args:
+            checkpoint_path: Path to model.zip file
+
+        Returns:
+            Dict with training config or None if not found:
+            {
+                'observation': {...},
+                'feature_engineering': {...},
+                'env': {...},
+                'source': 'embedded' | 'mlflow' | 'local'
+            }
+
+        Example:
+            >>> config = CheckpointManager.get_training_config(
+            ...     Path("checkpoints/PPO.../best_model.zip")
+            ... )
+            >>> if config:
+            ...     print(f"Features: {config['observation']['features']}")
+            ...     print(f"Source: {config['source']}")
+        """
+        checkpoint_path = Path(checkpoint_path)
+        manager = CheckpointManager()
+        metadata = manager._load_metadata(checkpoint_path)
+
+        if not metadata:
+            logger.warning(f"No metadata found for checkpoint: {checkpoint_path}")
+            return None
+
+        # Priority 1: Embedded config in metadata
+        if 'training_config' in metadata:
+            config = metadata['training_config'].copy()
+            config['source'] = 'embedded'
+            logger.info("Retrieved training config from embedded metadata")
+            return config
+
+        # Priority 2: Query MLflow
+        if 'mlflow' in metadata and 'run_id' in metadata['mlflow']:
+            try:
+                import mlflow
+                import yaml
+
+                run_id = metadata['mlflow']['run_id']
+                logger.info(f"Attempting to retrieve config from MLflow run: {run_id}")
+
+                # Download config artifact from MLflow
+                config_path = mlflow.artifacts.download_artifacts(
+                    run_id=run_id,
+                    artifact_path="config.yaml",
+                )
+
+                if Path(config_path).exists():
+                    with open(config_path) as f:
+                        full_config = yaml.safe_load(f)
+
+                    config = {
+                        'observation': full_config.get('observation', {}),
+                        'feature_engineering': full_config.get('feature_engineering', {}),
+                        'env': full_config.get('env', {}),
+                        'source': 'mlflow',
+                    }
+                    logger.info("Retrieved training config from MLflow")
+                    return config
+
+            except Exception as e:
+                logger.warning(f"Could not retrieve config from MLflow: {e}")
+
+        # Priority 3: Local config directory
+        checkpoint_dir = checkpoint_path.parent.parent
+        config_dir = checkpoint_dir / "config"
+
+        if config_dir.exists():
+            try:
+                import yaml
+
+                config = {'source': 'local'}
+
+                # Load individual config files
+                for config_name in ['observation', 'feature_engineering', 'env']:
+                    config_file = config_dir / f"{config_name}.yaml"
+                    if config_file.exists():
+                        with open(config_file) as f:
+                            config[config_name] = yaml.safe_load(f)
+
+                if len(config) > 1:  # Has configs beyond 'source'
+                    logger.info(f"Retrieved training config from local directory: {config_dir}")
+                    return config
+
+            except Exception as e:
+                logger.warning(f"Could not load config from local directory: {e}")
+
+        logger.warning(f"No training config found for checkpoint: {checkpoint_path}")
+        logger.info("Train with updated code to embed configs in checkpoints")
+        return None
+
     # ========================================================================
     # Internal Methods
     # ========================================================================
@@ -297,9 +532,60 @@ class CheckpointManager:
                 'name': type(extractor).__name__,
             }
 
-        # Add custom metadata
+        # Add MLflow run ID if available (enables config retrieval)
+        try:
+            import mlflow
+            if mlflow.active_run():
+                metadata['mlflow'] = {
+                    'run_id': mlflow.active_run().info.run_id,
+                    'experiment_id': mlflow.active_run().info.experiment_id,
+                    'run_name': mlflow.active_run().info.run_name,
+                }
+                logger.info(f"Linked checkpoint to MLflow run: {metadata['mlflow']['run_id']}")
+        except Exception as e:
+            logger.debug(f"Could not add MLflow run ID to metadata: {e}")
+
+        # Extract and embed training configs if provided in custom_metadata
+        # This enables offline config retrieval without MLflow
         if custom_metadata:
-            metadata['custom'] = custom_metadata
+            # Store essential configs for live trading
+            training_config = {}
+
+            if 'observation_config' in custom_metadata:
+                obs_config = custom_metadata['observation_config']
+                # Handle both Pydantic objects and dicts (defensive)
+                training_config['observation'] = (
+                    obs_config.model_dump() if hasattr(obs_config, 'model_dump') else obs_config
+                )
+                logger.debug("Embedded observation config in checkpoint metadata")
+
+            if 'feature_engineering_config' in custom_metadata:
+                fe_config = custom_metadata['feature_engineering_config']
+                # Handle both Pydantic objects and dicts (defensive)
+                training_config['feature_engineering'] = (
+                    fe_config.model_dump() if hasattr(fe_config, 'model_dump') else fe_config
+                )
+                logger.debug("Embedded feature engineering config in checkpoint metadata")
+
+            if 'env_config' in custom_metadata:
+                env_cfg = custom_metadata['env_config']
+                # Handle both Pydantic objects and dicts (defensive)
+                training_config['env'] = (
+                    env_cfg.model_dump() if hasattr(env_cfg, 'model_dump') else env_cfg
+                )
+                logger.debug("Embedded environment config in checkpoint metadata")
+
+            if training_config:
+                metadata['training_config'] = training_config
+
+            # Add remaining custom metadata (also serialize Pydantic objects)
+            serialized_custom_metadata = {}
+            for key, value in custom_metadata.items():
+                if hasattr(value, 'model_dump'):
+                    serialized_custom_metadata[key] = value.model_dump()
+                else:
+                    serialized_custom_metadata[key] = value
+            metadata['custom'] = serialized_custom_metadata
 
         return metadata
 

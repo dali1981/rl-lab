@@ -1,0 +1,65 @@
+# Single Symbol Trading Configuration
+# Simplified configuration for example purposes
+
+# Trading setup
+symbol: BTCUSDT
+
+# Model configuration
+model:
+  path: "checkpoints/PPO_returns_20251028_143659/best_model"
+  vecnormalize: "checkpoints/PPO_returns_20251028_143659/vecnormalize.pkl"
+  type: "PPO"
+
+# Dollar volume bar threshold
+# Creates a new bar when this much dollar volume has been traded
+dollar_volume_threshold: 1000000  # $1M per bar
+
+# Risk management
+risk:
+  # Portfolio settings
+  initial_balance: 10000  # USD
+  max_position_pct: 0.95  # Max 95% of balance in positions
+
+  # Position sizing
+  max_position_size: 1000  # USD per position
+  min_order_size: 10  # USD minimum order
+
+  # Stop-loss and circuit breaker
+  max_drawdown: 0.20  # Stop trading if drawdown exceeds 20%
+
+  # Trade limits
+  max_trades_per_hour: 20
+  max_trades_per_day: 100
+  min_holding_period: 60  # seconds (prevent churning)
+
+# Feature engineering
+features:
+  # Rolling window for feature computation
+  lookback_window: 100
+  min_bars_required: 21  # Need 20 for SMA(20) + 1 for current
+
+# Safety guards
+safety:
+  # Enable circuit breaker
+  enable_circuit_breaker: true
+
+  # Trading hours (UTC)
+  # Set to null to trade 24/7
+  trading_hours_start: 9   # 9am UTC
+  trading_hours_end: 21    # 9pm UTC
+
+  # Connection monitoring
+  max_websocket_reconnects: 5
+  websocket_timeout: 30  # seconds
+
+# Dashboard
+dashboard:
+  enabled: true
+  refresh_rate: 1  # seconds
+  show_predictions: true
+  show_features: false  # Set true for debugging
+
+# Logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

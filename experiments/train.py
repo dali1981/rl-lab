@@ -430,24 +430,26 @@ def _calculate_final_metrics(vec_env, trajectory: Dict[str, List]) -> Dict[str, 
     Calculate final backtest metrics including P&L and Sharpe ratio.
 
     Args:
-        vec_env: Vectorized environment (to access unwrapped env)
+        vec_env: Vectorized environment (VecNormalize or DummyVecEnv)
         trajectory: Collected trajectory data
 
     Returns:
         Dictionary of final metrics
     """
-    # Unwrap environment using helper
-    unwrapped_env = unwrap_vectorized_env(vec_env)
+    # Use VecEnv API to access wrapped environment methods
+    # This works through all wrapper layers (VecNormalize, DummyVecEnv, Monitor)
 
     # Close any remaining open positions to realize all P&L
-    unwrapped_env.close_all_positions()
+    vec_env.env_method('close_all_positions')
 
     # Get final portfolio value after closing positions
-    current_price = unwrapped_env._get_current_price()
-    final_portfolio_value = unwrapped_env.portfolio.get_portfolio_value(current_price)
+    # env_method and get_attr return lists (one per env), we have 1 env so take [0]
+    current_price = vec_env.env_method('_get_current_price')[0]
+    portfolio = vec_env.get_attr('portfolio')[0]
+    final_portfolio_value = portfolio.get_portfolio_value(current_price)
 
     # Calculate final return
-    initial_balance = unwrapped_env.initial_balance
+    initial_balance = vec_env.get_attr('initial_balance')[0]
     final_return = (final_portfolio_value - initial_balance) / initial_balance
 
     # Calculate Sharpe from actual returns (not from Sharpe rewards)
@@ -571,6 +573,8 @@ def main(cfg: DictConfig):
             make_env=make_env,
             save_path=config.training.save_path,
             device=config.experiment.device,
+            observation_config=config.observation,
+            feature_engineering_config=config.feature_engineering,
         )
 
         # Train agent with only needed parameters
