@@ -104,6 +104,19 @@ validate_*.py
 !tests/test_*.py
 !tests/**/test_*.py
 
-# Examples and freelance directories (might ignore later)
+# Examples and freelance directories
 # examples/
-# freelance/
+freelance/
+
+# Claude Code
+.claude/
+
+# Internals
+internals/
+
+# Sample data
+sample_data/
+sample-data/
+
+# Python version files
+.python-version
