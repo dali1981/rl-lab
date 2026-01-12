@@ -81,3 +81,29 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Playwright MCP
+.playwright-mcp/
+
+# Temporary documentation & reports
+*_REPORT.md
+*_SUMMARY.md
+*_GUIDE.md
+*_ROADMAP.md
+*_FIX.md
+*_RESULTS.md
+*_BUGS*.md
+SESSION_*.md
+worktree_status.txt
+
+# Temporary test scripts (keep organized tests in tests/)
+test_*.py
+demo_*.py
+inspect_*.py
+validate_*.py
+!tests/test_*.py
+!tests/**/test_*.py
+
+# Examples and freelance directories (might ignore later)
+# examples/
+# freelance/
