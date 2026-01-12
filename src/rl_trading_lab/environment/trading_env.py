@@ -179,6 +179,28 @@ class TradingEnv(gym.Env):
                    f"reward_type={self.reward_type}, "
                    f"data_length={len(self.df)}")
 
+    # --- Convenience properties for backward compatibility ---
+
+    @property
+    def num_trades(self) -> int:
+        """Number of trades executed (convenience property)."""
+        return self.portfolio.num_trades
+
+    @property
+    def balance(self) -> float:
+        """Current cash balance (convenience property)."""
+        return self.portfolio.cash.balance
+
+    @property
+    def position(self):
+        """Current position (convenience property)."""
+        return self.portfolio.position
+
+    def _get_portfolio_value(self) -> float:
+        """Get current portfolio value (convenience method for tests)."""
+        current_price = self._get_current_price()
+        return self.portfolio.get_portfolio_value(current_price)
+
     def reset(
         self,
         *,
@@ -289,9 +311,16 @@ class TradingEnv(gym.Env):
 
         return obs
 
+    def _get_current_timestamp(self):
+        """Get current timestamp from data if available."""
+        if 'timestamp' in self.df.columns:
+            return self.df.iloc[self.current_step].get('timestamp', None)
+        return None
+
     def _execute_action(self, action: Action):
         """Execute trading action"""
         current_price = self._get_current_price()
+        current_timestamp = self._get_current_timestamp()
 
         # Track position state before action for ONE_TRADE mode
         had_position = self.portfolio.position.size != 0
@@ -302,19 +331,19 @@ class TradingEnv(gym.Env):
                 # Configurable behavior: close position or do nothing
                 if self.hold_closes_position and self.portfolio.position.size != 0:
                     logger.debug(f"Hold action closing position: size={self.portfolio.position.size:.4f}")
-                    self.portfolio.close_position(current_price, self.current_step, self.df)
+                    self.portfolio.close_position(current_price, self.current_step, current_timestamp)
                     # Check if position was closed
                     if had_position and self.portfolio.position.size == 0:
                         self.position_closed_this_episode = True
                 return
             elif action == Action.BUY:
-                self.portfolio.execute_trade(1.0, current_price, self.current_step, self.df)
+                self.portfolio.execute_trade(1.0, current_price, self.current_step, current_timestamp)
             elif action == Action.SELL:
-                self.portfolio.execute_trade(-1.0, current_price, self.current_step, self.df)
+                self.portfolio.execute_trade(-1.0, current_price, self.current_step, current_timestamp)
         else:
             # Continuous action: -1 to 1
             if abs(action) > 0.1:  # Threshold to avoid tiny trades
-                self.portfolio.execute_trade(action, current_price, self.current_step, self.df)
+                self.portfolio.execute_trade(action, current_price, self.current_step, current_timestamp)
 
         # Check if position was closed during execute_trade (for BUY/SELL actions)
         if had_position and self.portfolio.position.size == 0:
@@ -327,7 +356,8 @@ class TradingEnv(gym.Env):
         """
         if self.portfolio.position.size != 0:
             current_price = self._get_current_price()
-            self.portfolio.close_all_positions(current_price, self.current_step, self.df)
+            current_timestamp = self._get_current_timestamp()
+            self.portfolio.close_all_positions(current_price, self.current_step, current_timestamp)
 
     def _get_current_price(self) -> float:
         """Get current price from data using configured price column"""
@@ -450,18 +480,18 @@ class TradingEnv(gym.Env):
             List of trade dictionaries with entry/exit details.
             Each trade contains:
             - trade_id: Trade number
-            - open_step, close_step: Step numbers when opened/closed
-            - open_timestamp, close_timestamp: Timestamps (if available)
+            - entry_bar, exit_bar: Bar indices when opened/closed
+            - entry_timestamp, exit_timestamp: Timestamps (if available)
             - side: 'LONG' or 'SHORT'
             - entry_price, exit_price: Execution prices
             - position_size: Size of position
-            - pnl: Raw profit/loss
+            - gross_pnl: P&L before commissions
             - entry_commission, exit_commission: Commission paid
             - net_pnl: P&L after commissions
             - return_pct: Return as percentage of trade value
             - hold_bars: Number of bars position was held
         """
-        return self.portfolio.get_trade_history()
+        return self.portfolio.get_trade_history_dicts()
 
     def render(self):
         """Render environment (for debugging)"""

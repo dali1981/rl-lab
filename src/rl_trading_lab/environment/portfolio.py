@@ -34,21 +34,17 @@ This model ensures:
 """
 
 import logging
+import warnings
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 import numpy as np
-import pandas as pd
-from dataclasses import dataclass
-from typing import Optional, Dict, Any, List
+
+from rl_trading_lab.domain.exceptions import InsufficientFundsError
+from rl_trading_lab.domain.value_objects.position import Position
+from rl_trading_lab.domain.value_objects.trade import CompletedTrade, TradeSide
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class Position:
-    """Track current position state"""
-    size: float = 0.0  # Position size (positive=long, negative=short, 0=flat)
-    entry_price: float = 0.0
-    entry_bar: int = 0
-    current_bar: int = 0
 
 
 class Cash:
@@ -59,7 +55,7 @@ class Cash:
     - debit(): Remove cash (paying for something)
     - credit(): Add cash (receiving payment)
 
-    This is much clearer than manual sign handling and prevents errors.
+    Enforces the invariant: cash balance cannot go negative.
     """
 
     def __init__(self, initial_balance: float):
@@ -68,28 +64,71 @@ class Cash:
 
         Args:
             initial_balance: Starting cash amount
+
+        Raises:
+            ValueError: If initial_balance is negative
         """
+        if initial_balance < 0:
+            raise ValueError(f"Initial balance cannot be negative: {initial_balance}")
         self._balance = initial_balance
         self.initial_balance = initial_balance
 
     @property
     def balance(self) -> float:
-        """Get current cash balance"""
+        """Get current cash balance."""
         return self._balance
 
-    def debit(self, amount: float) -> float:
+    def debit(self, amount: float, strict: bool = True) -> float:
         """
         Remove cash from account (payment/cost).
 
         Args:
             amount: Amount to deduct (sign is ignored, always debits)
+            strict: If True, raise InsufficientFundsError when balance too low.
+                   If False, allow negative balance (legacy behavior, deprecated).
 
         Returns:
             Absolute amount debited
+
+        Raises:
+            InsufficientFundsError: If strict=True and insufficient funds
         """
         amount_abs = abs(amount)
+
+        if strict and amount_abs > self._balance:
+            raise InsufficientFundsError(
+                requested=amount_abs,
+                available=self._balance,
+            )
+
+        if not strict and amount_abs > self._balance:
+            warnings.warn(
+                f"Debiting ${amount_abs:.2f} from balance ${self._balance:.2f} "
+                "will result in negative balance. This behavior is deprecated.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         self._balance -= amount_abs
         return amount_abs
+
+    def try_debit(self, amount: float) -> tuple:
+        """
+        Attempt to debit, returning success status.
+
+        Use this instead of has_funds() + debit() for atomicity.
+
+        Args:
+            amount: Amount to debit (absolute value used)
+
+        Returns:
+            Tuple of (success: bool, amount_debited: float)
+        """
+        amount_abs = abs(amount)
+        if amount_abs > self._balance:
+            return (False, 0.0)
+        self._balance -= amount_abs
+        return (True, amount_abs)
 
     def credit(self, amount: float) -> float:
         """
@@ -118,7 +157,7 @@ class Cash:
         return self._balance >= abs(amount)
 
     def reset(self) -> None:
-        """Reset cash to initial balance"""
+        """Reset cash to initial balance."""
         self._balance = self.initial_balance
 
 
@@ -128,9 +167,11 @@ class Portfolio:
 
     Implements SPOT TRADING model (see module docstring for details).
 
+    Uses immutable Position value objects - state changes create new Position instances.
+
     Attributes:
         cash: Cash instance managing available balance
-        position: Current position state (size, entry_price, entry_bar)
+        position: Current position state (immutable Position value object)
         num_trades: Count of executed trades
         trade_history: List of completed round-trip trades
 
@@ -167,20 +208,25 @@ class Portfolio:
 
         # Account state
         self.cash = Cash(initial_cash)
-        self.position = Position()
+        self._position = Position.flat()  # Immutable position
 
         # Trade tracking
         self.num_trades = 0
-        self.trade_history: List[Dict[str, Any]] = []
-        self._open_trade: Optional[Dict[str, Any]] = None
+        self._trade_history: List[CompletedTrade] = []
+        self._open_trade_data: Optional[Dict[str, Any]] = None
+
+    @property
+    def position(self) -> Position:
+        """Current position (immutable)."""
+        return self._position
 
     def reset(self):
-        """Reset portfolio to initial state"""
+        """Reset portfolio to initial state."""
         self.cash.reset()
-        self.position = Position()
+        self._position = Position.flat()
         self.num_trades = 0
-        self.trade_history.clear()
-        self._open_trade = None
+        self._trade_history.clear()
+        self._open_trade_data = None
 
     def get_portfolio_value(self, current_price: float) -> float:
         """
@@ -199,11 +245,11 @@ class Portfolio:
         Returns:
             Total portfolio value (mark-to-market)
         """
-        if self.position.size == 0:
+        if self._position.is_flat:
             return self.cash.balance
 
-        # Spot trading: value = cash + position value (not unrealized P&L)
-        position_value = self.position.size * current_price
+        # Spot trading: value = cash + position value
+        position_value = self._position.market_value(current_price)
         return self.cash.balance + position_value
 
     def get_position_pnl(self, current_price: float) -> float:
@@ -216,11 +262,7 @@ class Portfolio:
         Returns:
             Unrealized P&L (0 if no position)
         """
-        if self.position.size == 0:
-            return 0.0
-
-        pnl = self.position.size * (current_price - self.position.entry_price)
-        return pnl
+        return self._position.unrealized_pnl(current_price)
 
     def calculate_position_size(self, signal: float, current_price: float) -> float:
         """
@@ -252,17 +294,19 @@ class Portfolio:
             True if position should be closed
         """
         # No position to close
-        if self.position.size == 0:
+        if self._position.is_flat:
             return False
 
         # Don't close if minimum holding period not met
-        bars_held = current_step - self.position.entry_bar
+        bars_held = self._position.holding_period(current_step)
         if bars_held < self.min_holding_period:
-            logger.debug(f"Position held for {bars_held} bars, need {self.min_holding_period} bars minimum")
+            logger.debug(
+                f"Position held for {bars_held} bars, need {self.min_holding_period} bars minimum"
+            )
             return False
 
         # Close if taking opposite direction
-        if np.sign(signal) != np.sign(self.position.size):
+        if np.sign(signal) != self._position.direction:
             return True
 
         return False
@@ -272,33 +316,46 @@ class Portfolio:
         signal: float,
         current_price: float,
         current_step: int,
-        df: Optional[pd.DataFrame] = None,
+        timestamp: Optional[datetime] = None,
     ) -> bool:
         """
         Execute a trade based on signal.
 
         Handles closing existing positions and opening new ones.
+        On reversal (opposite signal), closes current position AND opens new one.
 
         Args:
             signal: Trading signal (-1 for short, 0 for flat, +1 for long)
             current_price: Current market price
             current_step: Current bar/step number
-            df: Optional dataframe for timestamp tracking
+            timestamp: Optional timestamp for trade records
 
         Returns:
             True if a trade was executed
         """
+        trade_executed = False
+
         # Check if we should close current position
         if self.should_close_position(signal, current_step):
-            logger.debug(f"Closing position: current={self.position.size:.4f}, signal={signal:.1f}")
-            self.close_position(current_price, current_step, df)
+            logger.debug(
+                f"Closing position: current={self._position.size:.4f}, signal={signal:.1f}"
+            )
+            self.close_position(current_price, current_step, timestamp)
+            trade_executed = True
+
+            # After closing, if signal is non-zero, open new position (reversal)
+            if signal != 0:
+                logger.debug(f"Reversal: opening new position with signal={signal:.1f}")
+                self._open_position(signal, current_price, current_step, timestamp)
+                logger.debug(f"Position opened: size={self._position.size:.4f}")
+
             return True
 
         # Open new position if flat and signal is non-zero
-        if self.position.size == 0 and signal != 0:
+        if self._position.is_flat and signal != 0:
             logger.debug(f"Opening position: signal={signal:.1f}, price={current_price:.2f}")
-            self._open_position(signal, current_price, current_step, df)
-            logger.debug(f"Position opened: size={self.position.size:.4f}")
+            self._open_position(signal, current_price, current_step, timestamp)
+            logger.debug(f"Position opened: size={self._position.size:.4f}")
             return True
 
         return False
@@ -308,10 +365,12 @@ class Portfolio:
         signal: float,
         current_price: float,
         current_step: int,
-        df: Optional[pd.DataFrame] = None,
+        timestamp: Optional[datetime] = None,
     ):
         """
         Open a new position using spot trading model with explicit cash operations.
+
+        Creates a new immutable Position object.
 
         CASH FLOW (SPOT TRADING):
         - LONG (signal > 0):
@@ -325,7 +384,7 @@ class Portfolio:
             signal: Trading signal (-1 for short, +1 for long)
             current_price: Current market price
             current_step: Current bar/step number
-            df: Optional dataframe for timestamp tracking
+            timestamp: Optional timestamp for trade record
         """
         if signal == 0:
             return
@@ -342,20 +401,33 @@ class Portfolio:
 
         # Check if we have enough cash for the trade (worst case: LONG)
         if not self.cash.has_funds(trade_value + commission):
+            logger.debug(
+                f"Insufficient funds: need ${trade_value + commission:.2f}, "
+                f"have ${self.cash.balance:.2f}"
+            )
             return
 
-        # Update position
-        self.position.size = position_size
-        self.position.entry_price = execution_price
-        self.position.entry_bar = current_step
+        # Create new immutable position
+        if signal > 0:
+            self._position = Position.open_long(
+                size=abs(position_size),
+                price=execution_price,
+                bar=current_step,
+            )
+        else:
+            self._position = Position.open_short(
+                size=abs(position_size),
+                price=execution_price,
+                bar=current_step,
+            )
 
         # Execute cash flow based on position type
         if signal > 0:  # LONG: Pay cash to buy
-            debited = self.cash.debit(trade_value + commission)
+            debited = self.cash.debit(trade_value + commission, strict=False)
             cash_flow_description = f"-${debited:.2f}"
         else:  # SHORT: Receive cash from selling, pay commission
             credited = self.cash.credit(trade_value)
-            debited = self.cash.debit(commission)
+            debited = self.cash.debit(commission, strict=False)
             cash_flow_description = f"+${credited:.2f}, -${debited:.2f}"
 
         # Increment trade counter
@@ -367,28 +439,26 @@ class Portfolio:
         )
 
         # Track open trade for history
-        timestamp = None
-        if df is not None and 'timestamp' in df.columns:
-            timestamp = df.iloc[current_step].get('timestamp', None)
-
-        self._open_trade = {
-            'trade_id': self.num_trades,
-            'open_step': current_step,
-            'open_timestamp': timestamp,
-            'side': 'LONG' if signal > 0 else 'SHORT',
-            'entry_price': execution_price,
-            'position_size': position_size,
-            'entry_commission': commission,
+        self._open_trade_data = {
+            "trade_id": self.num_trades,
+            "open_step": current_step,
+            "open_timestamp": timestamp,
+            "side": TradeSide.LONG if signal > 0 else TradeSide.SHORT,
+            "entry_price": execution_price,
+            "position_size": abs(position_size),
+            "entry_commission": commission,
         }
 
     def close_position(
         self,
         current_price: float,
         current_step: int,
-        df: Optional[pd.DataFrame] = None,
+        timestamp: Optional[datetime] = None,
     ):
         """
         Close current position using spot trading model with explicit cash operations.
+
+        Creates a CompletedTrade value object and resets position to flat.
 
         CASH FLOW (SPOT TRADING):
         - Closing LONG (size > 0):
@@ -403,65 +473,65 @@ class Portfolio:
         Args:
             current_price: Current market price
             current_step: Current bar/step number
-            df: Optional dataframe for timestamp tracking
+            timestamp: Optional timestamp for trade record
         """
-        if self.position.size == 0:
+        if self._position.is_flat:
             return
 
         # Apply slippage (opposite direction when closing)
-        execution_price = current_price * (1 - self.slippage_rate * np.sign(self.position.size))
+        execution_price = current_price * (
+            1 - self.slippage_rate * self._position.direction
+        )
 
         # Calculate trade value and commission
-        trade_value = abs(self.position.size * execution_price)
+        trade_value = abs(self._position.size * execution_price)
         commission = trade_value * self.commission_rate
 
-        # Calculate P&L for logging (difference between entry and exit)
-        pnl = self.position.size * (execution_price - self.position.entry_price)
+        # Calculate P&L for logging
+        pnl = self._position.unrealized_pnl(execution_price)
 
         # Execute cash flow based on position type
-        if self.position.size > 0:  # Closing LONG: Receive cash from selling
+        if self._position.is_long:  # Closing LONG: Receive cash from selling
             credited = self.cash.credit(trade_value)
-            debited = self.cash.debit(commission)
+            debited = self.cash.debit(commission, strict=False)
             cash_flow_description = f"+${credited:.2f}, -${debited:.2f}"
         else:  # Closing SHORT: Pay cash to buy back
-            debited_total = self.cash.debit(trade_value + commission)
+            debited_total = self.cash.debit(trade_value + commission, strict=False)
             cash_flow_description = f"-${debited_total:.2f}"
 
         # Log closing trade
         logger.debug(
             f"Position closed: P&L=${pnl:.2f}, Commission=${commission:.2f}, "
-            f"Net=${pnl-commission:.2f} (cash flow: {cash_flow_description}, "
+            f"Net=${pnl - commission:.2f} (cash flow: {cash_flow_description}, "
             f"balance: ${self.cash.balance:.2f})"
         )
 
         # Record completed trade in history
-        if self._open_trade is not None:
-            timestamp = None
-            if df is not None and 'timestamp' in df.columns:
-                timestamp = df.iloc[current_step].get('timestamp', None)
+        if self._open_trade_data is not None:
+            completed_trade = CompletedTrade(
+                trade_id=self._open_trade_data["trade_id"],
+                side=self._open_trade_data["side"],
+                entry_price=self._open_trade_data["entry_price"],
+                exit_price=execution_price,
+                position_size=self._open_trade_data["position_size"],
+                entry_bar=self._open_trade_data["open_step"],
+                exit_bar=current_step,
+                entry_commission=self._open_trade_data["entry_commission"],
+                exit_commission=commission,
+                entry_timestamp=self._open_trade_data["open_timestamp"],
+                exit_timestamp=timestamp,
+            )
+            self._trade_history.append(completed_trade)
+            self._open_trade_data = None
 
-            trade_value_at_entry = abs(self._open_trade['position_size'] * self._open_trade['entry_price'])
-            self.trade_history.append({
-                **self._open_trade,
-                'close_step': current_step,
-                'close_timestamp': timestamp,
-                'exit_price': execution_price,
-                'pnl': pnl,
-                'exit_commission': commission,
-                'net_pnl': pnl - commission,
-                'return_pct': (pnl - commission) / trade_value_at_entry if trade_value_at_entry > 0 else 0.0,
-                'hold_bars': current_step - self._open_trade['open_step'],
-            })
-            self._open_trade = None
-
-        # Reset position
-        self.position = Position()
+        # Reset position to flat (new immutable instance)
+        self._position = Position.flat()
 
     def close_all_positions(
         self,
         current_price: float,
         current_step: int,
-        df: Optional[pd.DataFrame] = None,
+        timestamp: Optional[datetime] = None,
     ):
         """
         Close all open positions at current price.
@@ -470,29 +540,41 @@ class Portfolio:
         Args:
             current_price: Current market price
             current_step: Current bar/step number
-            df: Optional dataframe for timestamp tracking
+            timestamp: Optional timestamp for trade record
         """
-        if self.position.size != 0:
-            logger.debug(f"Closing position at episode end: size={self.position.size:.4f}, price={current_price:.2f}")
-            self.close_position(current_price, current_step, df)
+        if not self._position.is_flat:
+            logger.debug(
+                f"Closing position at episode end: size={self._position.size:.4f}, "
+                f"price={current_price:.2f}"
+            )
+            self.close_position(current_price, current_step, timestamp)
 
-    def get_trade_history(self) -> List[Dict[str, Any]]:
+    def get_trade_history(self) -> List[CompletedTrade]:
         """
         Get history of completed round-trip trades.
 
         Returns:
-            List of trade dictionaries with entry/exit details.
-            Each trade contains:
-            - trade_id: Trade number
-            - open_step, close_step: Step numbers when opened/closed
-            - open_timestamp, close_timestamp: Timestamps (if available)
-            - side: 'LONG' or 'SHORT'
-            - entry_price, exit_price: Execution prices
-            - position_size: Size of position
-            - pnl: Raw profit/loss
-            - entry_commission, exit_commission: Commission paid
-            - net_pnl: P&L after commissions
-            - return_pct: Return as percentage of trade value
-            - hold_bars: Number of bars position was held
+            List of CompletedTrade value objects
         """
-        return self.trade_history
+        return self._trade_history.copy()
+
+    def get_trade_history_dicts(self) -> List[Dict[str, Any]]:
+        """
+        Get history of completed trades as dictionaries.
+
+        For backward compatibility with code expecting dict format.
+
+        Returns:
+            List of trade dictionaries with entry/exit details.
+        """
+        return [trade.to_dict() for trade in self._trade_history]
+
+    @property
+    def trade_history(self) -> List[Dict[str, Any]]:
+        """
+        Legacy property for backward compatibility.
+
+        Returns trade history as list of dicts.
+        Prefer get_trade_history() for new code.
+        """
+        return self.get_trade_history_dicts()
