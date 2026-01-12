@@ -1,0 +1,50 @@
+# MaskablePPO Agent Configuration
+# Uses sb3-contrib's MaskablePPO for proper action masking during training
+
+name: "MaskablePPO"
+algorithm: "sb3_contrib.MaskablePPO"
+
+# MaskablePPO hyperparameters (same as PPO)
+hyperparameters:
+  # Learning
+  learning_rate: 1.0e-3
+  n_steps: 2048  # Number of steps per environment per update
+  batch_size: 64  # Minibatch size
+  n_epochs: 10  # Number of epochs when optimizing
+
+  # Advantage estimation
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE lambda
+
+  # PPO clipping
+  clip_range: 0.2  # PPO clip parameter
+  clip_range_vf: null  # Clip range for value function (null=no clipping)
+
+  # Regularization
+  ent_coef: 0.1  # Entropy coefficient (higher encourages exploration)
+  vf_coef: 0.5  # Value function coefficient
+  max_grad_norm: 0.5  # Max gradient norm
+
+  # Network architecture
+  # Note: MaskablePPO will automatically use MaskableActorCriticPolicy
+  policy: "MlpPolicy"
+  policy_kwargs:
+    net_arch:
+      pi: [256, 256]  # Actor network
+      vf: [256, 256]  # Critic network
+    activation_fn: "ReLU"
+    normalize_images: false
+
+  # Other settings
+  normalize_advantage: true
+  # Note: MaskablePPO doesn't support use_sde parameter
+
+# Training settings specific to this agent
+verbose: 1
+tensorboard_log: "${logging.tensorboard.log_dir}"
+
+# Recommended training timesteps for MaskablePPO
+training:
+  total_timesteps: 1_000_000  # Recommended: 100k-1M depending on complexity
+  eval_freq: 5_000
+  save_freq: 10_000

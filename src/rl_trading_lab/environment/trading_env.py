@@ -227,6 +227,8 @@ class TradingEnv(gym.Env):
         prev_balance = self.portfolio.get_portfolio_value(current_price)
 
         # Execute action
+        # Note: MaskablePPO will prevent invalid actions from being sampled
+        # If used without masking support, invalid actions will be silently ignored by portfolio
         self._execute_action(action)
 
         # Move to next step
@@ -380,10 +382,37 @@ class TradingEnv(gym.Env):
 
         return False
 
+    def action_masks(self) -> np.ndarray:
+        """
+        Get boolean mask of valid actions for current state.
+
+        Required by MaskablePPO from sb3-contrib. Returns array where:
+        - True = action is valid
+        - False = action is invalid
+
+        Returns:
+            Boolean array of shape (n_actions,) indicating valid actions
+        """
+        position_sign = np.sign(self.portfolio.position.size)
+
+        if position_sign == 0:  # Flat (no position)
+            # All actions valid: HOLD, BUY, SELL
+            return np.array([True, True, True], dtype=bool)
+        elif position_sign > 0:  # LONG position
+            # Can HOLD or SELL, cannot BUY
+            return np.array([True, False, True], dtype=bool)
+        else:  # SHORT position (position_sign < 0)
+            # Can HOLD or BUY, cannot SELL
+            return np.array([True, True, False], dtype=bool)
+
     def _get_info(self) -> Dict[str, Any]:
         """Get info dictionary"""
         current_price = self._get_current_price()
         portfolio_value = self.portfolio.get_portfolio_value(current_price)
+
+        # Get action mask for info dict (for compatibility/debugging)
+        action_mask_bool = self.action_masks()
+        action_mask = action_mask_bool.astype(np.int8)
 
         info = {
             'step': self.current_step,
@@ -392,6 +421,7 @@ class TradingEnv(gym.Env):
             'position': self.portfolio.position.size,
             'total_return': (portfolio_value - self.initial_balance) / self.initial_balance,
             'num_trades': self.portfolio.num_trades,
+            'action_mask': action_mask,  # For compatibility/debugging
         }
 
         # Add performance metrics if we have history

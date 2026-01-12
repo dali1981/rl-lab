@@ -131,7 +131,7 @@ environment_params:
   # Whether "hold" action closes positions
   # true  = Hold action closes any open position (go flat)
   # false = Hold action keeps current position (do nothing)
-  hold_closes_position: true
+  hold_closes_position: false
 
   # ONE_TRADE mode: Terminate episode after first position close
   # true  = Episode ends when first position is closed (one trade per episode)

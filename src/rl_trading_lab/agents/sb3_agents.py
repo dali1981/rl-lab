@@ -25,11 +25,24 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.logger import Logger, configure
 
+# Import MaskablePPO from sb3-contrib
+try:
+    from sb3_contrib import MaskablePPO
+    from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
+    from sb3_contrib.common.maskable.evaluation import evaluate_policy as evaluate_policy_maskable
+    MASKABLE_AVAILABLE = True
+except ImportError:
+    logger.warning("sb3-contrib not installed. MaskablePPO will not be available. Install with: pip install sb3-contrib")
+    MaskablePPO = None
+    MaskableActorCriticPolicy = None
+    evaluate_policy_maskable = None
+    MASKABLE_AVAILABLE = False
+
 from rl_trading_lab.config import RootConfig
 from rl_trading_lab.config.agent import AgentConfig
 from rl_trading_lab.config.env import EnvConfig
 from rl_trading_lab.utils.mlflow_logger import MLflowOutputFormat
-from rl_trading_lab.utils.callbacks import MLflowCallback, TradingMetricsCallback
+from rl_trading_lab.utils.callbacks import TradingMetricsCallback
 from rl_trading_lab.utils.custom_callbacks import CheckpointManagerCallback, BestModelCallback
 from rl_trading_lab.utils.checkpoint_manager import CheckpointManager
 
@@ -50,6 +63,10 @@ ALGORITHMS = {
     "DQN": DQN,
     "SAC": SAC,
 }
+
+# Add MaskablePPO if available
+if MASKABLE_AVAILABLE:
+    ALGORITHMS["MaskablePPO"] = MaskablePPO
 
 # Custom policy mapping
 CUSTOM_POLICIES = {
@@ -128,6 +145,7 @@ class Trainer:
 
         # Create evaluation environment
         logger.info("Creating evaluation environment...")
+        logger.info(f"Env config one_trade_mode: {self.env_config.environment_params.one_trade_mode}")
         eval_env = self.make_env('eval')
         self.eval_env = self._wrap_environment(eval_env, is_eval=True)
 
@@ -225,6 +243,9 @@ class Trainer:
         if isinstance(policy, str) and policy in CUSTOM_POLICIES:
             policy = CUSTOM_POLICIES[policy]
             logger.info(f"Using custom policy: {policy.__name__}")
+
+        # Filter out None values from hyperparams (e.g., use_sde not supported by MaskablePPO)
+        hyperparams = {k: v for k, v in hyperparams.items() if v is not None}
 
         # Create agent
         agent = self.algo_class(
@@ -353,13 +374,6 @@ class Trainer:
         if callbacks:
             callback_list.extend(callbacks)
 
-        # Add MLflow logging callback
-        mlflow_callback = MLflowCallback(
-            log_freq=max(eval_freq // 10, 100) if eval_freq else 1000,
-            verbose=self.config.verbose,
-        )
-        callback_list.append(mlflow_callback)
-
         # Add trading metrics callback (only in multi-trade mode)
         # In one_trade_mode, each episode is a single trade, so win/loss tracking
         # is redundant with episode rewards
@@ -380,6 +394,12 @@ class Trainer:
             total_timesteps=total_timesteps,
             callback=combined_callback,
             progress_bar=progress_bar,
+            log_interval=2,  # Log every 2 rollouts/updates
+            # Recommended values:
+            # - log_interval=1: Log every rollout (PPO/A2C collect data in rollouts)
+            # - log_interval=2: Log every 2 rollouts (good balance, ~4k steps with n_steps=2048)
+            # - log_interval=4: Log every 4 rollouts
+            # - log_interval=100: Log every 100 environment steps (for off-policy like DQN/SAC)
         )
 
         # Save final model
@@ -412,14 +432,25 @@ class Trainer:
         """
         logger.info(f"Evaluating agent for {n_episodes} episodes...")
 
-        # Evaluate
-        episode_rewards, episode_lengths = evaluate_policy(
-            self.agent,
-            env,
-            n_eval_episodes=n_episodes,
-            deterministic=deterministic,
-            return_episode_rewards=True,
-        )
+        # Use maskable evaluation if agent is MaskablePPO
+        if MASKABLE_AVAILABLE and isinstance(self.agent, MaskablePPO):
+            logger.info("Using evaluate_policy_maskable for MaskablePPO")
+            episode_rewards, episode_lengths = evaluate_policy_maskable(
+                self.agent,
+                env,
+                n_eval_episodes=n_episodes,
+                deterministic=deterministic,
+                return_episode_rewards=True,
+            )
+        else:
+            # Use standard evaluation for other algorithms
+            episode_rewards, episode_lengths = evaluate_policy(
+                self.agent,
+                env,
+                n_eval_episodes=n_episodes,
+                deterministic=deterministic,
+                return_episode_rewards=True,
+            )
 
         # Debugging: Print individual episode rewards to investigate std_reward=0
         logger.info(f"DEBUG - Individual episode rewards: {episode_rewards}")
@@ -451,6 +482,7 @@ class Trainer:
         self,
         observation: np.ndarray,
         deterministic: bool = True,
+        action_masks: Optional[np.ndarray] = None,
     ):
         """
         Predict action for given observation.
@@ -458,11 +490,21 @@ class Trainer:
         Args:
             observation: Environment observation
             deterministic: Use deterministic action
+            action_masks: Optional boolean array of valid actions for MaskablePPO.
+                         Shape should be (n_actions,) with True for valid actions.
 
         Returns:
             action, state (if recurrent policy)
         """
-        return self.agent.predict(observation, deterministic=deterministic)
+        # Check if agent supports action masking (MaskablePPO)
+        if action_masks is not None and MASKABLE_AVAILABLE and isinstance(self.agent, MaskablePPO):
+            return self.agent.predict(
+                observation,
+                deterministic=deterministic,
+                action_masks=action_masks
+            )
+        else:
+            return self.agent.predict(observation, deterministic=deterministic)
 
     def save(self, path: Union[str, Path]):
         """Save the model"""
