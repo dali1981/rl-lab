@@ -5,6 +5,7 @@ Adapters connect the domain to external systems:
 - ParquetMarketDataAdapter: DataFrame-based market data
 - GymTradingEnvAdapter: Gymnasium framework integration (Anti-Corruption Layer)
 - MLflowExperimentTracker: MLflow-based experiment tracking
+- CsvDataLoader: CSV file data loading
 """
 
 from rl_trading_lab.infrastructure.adapters.market_data_adapter import (
@@ -18,6 +19,9 @@ from rl_trading_lab.infrastructure.adapters.mlflow_tracker import (
     MLflowExperimentTracker,
     create_mlflow_tracker,
 )
+from rl_trading_lab.infrastructure.adapters.csv_data_loader import (
+    CsvDataLoader,
+)
 
 __all__ = [
     # Domain adapters
@@ -27,4 +31,6 @@ __all__ = [
     # Application adapters
     "MLflowExperimentTracker",
     "create_mlflow_tracker",
+    # Data loaders
+    "CsvDataLoader",
 ]

@@ -32,6 +32,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from rl_trading_lab.config import RootConfig, load_config
 from rl_trading_lab.environment import TradingEnv, create_make_env
 from rl_trading_lab.agents.sb3_agents import Trainer
+from rl_trading_lab.agents.trainer_factory import TrainerFactory
 
 # Constants
 POSITION_EPSILON = 1e-3  # Threshold for considering a position as non-zero
@@ -273,26 +274,20 @@ def wrap_test_env_for_evaluation(make_env, trainer: Trainer):
     Returns:
         Properly wrapped test environment
     """
-    # Create test environment
+    from rl_trading_lab.agents.env_wrapper import EnvWrapperBuilder
+
     test_env = make_env('test')
 
-    # Use trainer's wrapping method to ensure consistency
-    test_vec_env = trainer._wrap_environment(test_env, is_eval=True)
+    # Re-create same wrapper config from trainer's env
+    builder = EnvWrapperBuilder(
+        vec_normalize_enabled=trainer.vec_normalize_enabled,
+    )
+    test_vec_env = builder.build(test_env, is_eval=True)
 
-    # Check if VecNormalize was used during training
-    if trainer.vec_normalize_enabled:
-        logger.info("Wrapping test environment with VecNormalize...")
-
-        # CRITICAL: Copy normalization statistics from training environment
-        # Without this, the test env would use different normalization!
-        if hasattr(trainer.env, 'obs_rms'):
-            test_vec_env.obs_rms = trainer.env.obs_rms
-            logger.info("Copied observation normalization stats from training")
-        else:
-            logger.warning("Could not copy normalization stats!")
-
-        if hasattr(trainer.env, 'ret_rms'):
-            test_vec_env.ret_rms = trainer.env.ret_rms
+    # Copy normalization statistics from training environment
+    if trainer.vec_normalize_enabled and isinstance(trainer.env, VecNormalize):
+        logger.info("Copying VecNormalize stats to test environment...")
+        builder.copy_normalization_stats(source=trainer.env, target=test_vec_env)
     else:
         logger.info("VecNormalize not used during training - using DummyVecEnv only")
 
@@ -303,10 +298,8 @@ def train_agent(
     agent_name: str,
     trainer: Trainer,
     total_timesteps: int,
-    eval_freq: int,
-    n_eval_episodes: int,
-    save_freq: int,
-    progress_bar: bool
+    callbacks=None,
+    progress_bar: bool = True,
 ) -> Tuple[Trainer, Dict[str, Any]]:
     """
     Train the RL agent.
@@ -315,9 +308,7 @@ def train_agent(
         agent_name: Name of the agent (for logging)
         trainer: Trainer instance
         total_timesteps: Total training timesteps
-        eval_freq: Evaluation frequency
-        n_eval_episodes: Number of episodes for evaluation
-        save_freq: Checkpoint save frequency
+        callbacks: Pre-built CallbackList from TrainerFactory.create_callbacks()
         progress_bar: Whether to show progress bar
 
     Returns:
@@ -325,12 +316,9 @@ def train_agent(
     """
     logger.info(f"Training {agent_name} agent...")
 
-    # Train
     metrics = trainer.train(
         total_timesteps=total_timesteps,
-        eval_freq=eval_freq,
-        n_eval_episodes=n_eval_episodes,
-        save_freq=save_freq,
+        callbacks=callbacks,
         progress_bar=progress_bar,
     )
 
@@ -566,8 +554,8 @@ def main(cfg: DictConfig):
             test_split=config.data.test_split,
         )
 
-        # Create trainer (creates and wraps environments internally)
-        trainer = Trainer(
+        # Create trainer via factory (creates and wraps environments internally)
+        trainer = TrainerFactory.from_config(
             agent_config=config.agent,
             env_config=config.env,
             make_env=make_env,
@@ -577,14 +565,23 @@ def main(cfg: DictConfig):
             feature_engineering_config=config.feature_engineering,
         )
 
-        # Train agent with only needed parameters
+        # Create callbacks from config
+        callbacks = TrainerFactory.create_callbacks(
+            trainer=trainer,
+            agent_config=config.agent,
+            env_config=config.env,
+            save_path=Path(config.training.save_path),
+            eval_freq=config.training.eval_freq,
+            n_eval_episodes=config.training.n_eval_episodes,
+            save_freq=config.training.save_freq,
+        )
+
+        # Train agent
         trainer, train_metrics = train_agent(
             agent_name=config.agent.name,
             trainer=trainer,
             total_timesteps=config.training.total_timesteps,
-            eval_freq=config.training.eval_freq,
-            n_eval_episodes=config.training.n_eval_episodes,
-            save_freq=config.training.save_freq,
+            callbacks=callbacks,
             progress_bar=config.logging.console.progress_bar,
         )
 
