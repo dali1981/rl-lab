@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .thumb {
+    width: 795px;
+    height: 595px;
+    background: linear-gradient(160deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
+    border: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    color: #e6edf3;
+    position: relative;
+    overflow: hidden;
+  }
+  /* Background grid effect */
+  .thumb::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      linear-gradient(rgba(48, 54, 61, 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(48, 54, 61, 0.3) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: 0;
+  }
+  .content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 40px;
+  }
+  .icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    background: linear-gradient(135deg, #58a6ff, #3fb950);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+  .divider {
+    width: 300px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #30363d, #58a6ff, #30363d, transparent);
+    margin: 16px auto;
+  }
+  .stats {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    margin: 20px 0;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat .num {
+    font-size: 32px;
+    font-weight: 700;
+    color: #58a6ff;
+  }
+  .stat .label {
+    font-size: 11px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+  .agents {
+    font-size: 16px;
+    color: #c9d1d9;
+    margin: 16px 0;
+    letter-spacing: 2px;
+  }
+  .agents span {
+    color: #3fb950;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #8b949e;
+    margin-top: 8px;
+    letter-spacing: 1px;
+  }
+  .divider2 {
+    width: 200px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #30363d, transparent);
+    margin: 20px auto;
+  }
+  .tech {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .tech span {
+    background: rgba(88, 166, 255, 0.1);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: #58a6ff;
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+<div class="thumb">
+  <div class="content">
+    <h1>RL TRADING LAB</h1>
+    <div class="divider"></div>
+
+    <div class="stats">
+      <div class="stat"><div class="num">52</div><div class="label">Models</div></div>
+      <div class="stat"><div class="num">79</div><div class="label">Experiments</div></div>
+      <div class="stat"><div class="num">13.7K</div><div class="label">Lines of Code</div></div>
+    </div>
+
+    <div class="agents">
+      <span>PPO</span> &middot; <span>A2C</span> &middot; <span>DQN</span> &middot; <span>MaskablePPO</span>
+    </div>
+    <div class="subtitle">Clean Architecture &middot; Reusable RL Module &middot; Live Trading</div>
+
+    <div class="divider2"></div>
+
+    <div class="tech">
+      <span>Gymnasium</span>
+      <span>Stable-Baselines3</span>
+      <span>MLflow</span>
+      <span>Hydra</span>
+      <span>PyTorch</span>
+      <span>Binance API</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

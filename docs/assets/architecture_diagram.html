@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 40px;
+  }
+  .diagram {
+    width: 900px;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #161b22;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .header {
+    background: linear-gradient(135deg, #1a7f37, #238636);
+    padding: 20px 28px;
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+  .header .sub {
+    font-size: 12px;
+    color: #b1d8b7;
+    margin-top: 4px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: #30363d;
+  }
+  .cell {
+    background: #161b22;
+    padding: 20px 24px;
+  }
+  .cell h2 {
+    font-size: 13px;
+    color: #58a6ff;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .cell ul {
+    list-style: none;
+    font-size: 13px;
+    line-height: 1.8;
+    color: #c9d1d9;
+  }
+  .cell ul li::before {
+    content: ">";
+    color: #3fb950;
+    margin-right: 8px;
+    font-weight: bold;
+  }
+  .full-row {
+    grid-column: 1 / -1;
+    background: #161b22;
+    padding: 16px 24px;
+    text-align: center;
+  }
+  .full-row h2 {
+    font-size: 13px;
+    color: #58a6ff;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .tag {
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 16px;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: #8b949e;
+  }
+  .stats-row {
+    grid-column: 1 / -1;
+    background: #0d1117;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-around;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat .num {
+    font-size: 24px;
+    font-weight: 700;
+    color: #58a6ff;
+  }
+  .stat .label {
+    font-size: 11px;
+    color: #8b949e;
+    margin-top: 2px;
+  }
+</style>
+</head>
+<body>
+<div class="diagram">
+  <div class="header">
+    <h1>RL TRADING LAB</h1>
+    <div class="sub">Reinforcement Learning Framework &mdash; Training to Production</div>
+  </div>
+  <div class="grid">
+
+    <div class="stats-row">
+      <div class="stat"><div class="num">52</div><div class="label">Trained Models</div></div>
+      <div class="stat"><div class="num">79</div><div class="label">MLflow Runs</div></div>
+      <div class="stat"><div class="num">13.7K</div><div class="label">Lines of Code</div></div>
+      <div class="stat"><div class="num">4</div><div class="label">Agent Types</div></div>
+    </div>
+
+    <div class="cell">
+      <h2>Reusable RL Module</h2>
+      <ul>
+        <li>Trainer (any Gym env)</li>
+        <li>EnvWrapperBuilder</li>
+        <li>CallbackFactory</li>
+        <li>Pluggable data ports</li>
+      </ul>
+    </div>
+    <div class="cell">
+      <h2>Trading Domain (Pure)</h2>
+      <ul>
+        <li>TradingDomain orchestrator</li>
+        <li>Position, Trade value objects</li>
+        <li>Reward &amp; Risk strategies</li>
+        <li>MarketDataPort interface</li>
+      </ul>
+    </div>
+    <div class="cell">
+      <h2>Training Pipeline</h2>
+      <ul>
+        <li>PPO / A2C / DQN / MaskablePPO</li>
+        <li>Transformer custom policy</li>
+        <li>MLflow experiment tracking</li>
+        <li>Hydra config management</li>
+      </ul>
+    </div>
+    <div class="cell">
+      <h2>Live Trading</h2>
+      <ul>
+        <li>Binance WebSocket stream</li>
+        <li>Real-time model inference</li>
+        <li>Circuit breaker safety</li>
+        <li>Rich terminal dashboard</li>
+      </ul>
+    </div>
+
+    <div class="full-row">
+      <h2>Tech Stack</h2>
+      <div class="tags">
+        <span class="tag">Python 3.12</span>
+        <span class="tag">Stable-Baselines3</span>
+        <span class="tag">Gymnasium</span>
+        <span class="tag">PyTorch</span>
+        <span class="tag">MLflow</span>
+        <span class="tag">Hydra</span>
+        <span class="tag">Pydantic</span>
+        <span class="tag">Rich</span>
+        <span class="tag">Binance API</span>
+        <span class="tag">Delta Lake</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
