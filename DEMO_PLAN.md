@@ -5,7 +5,7 @@ Upwork clients seeking:
 - Custom algorithmic trading systems
 - Reinforcement learning / ML engineering
 - Binance/exchange integrations
-- Production-grade trading bots
+- Safety-gated trading system prototypes
 
 ---
 
@@ -15,11 +15,11 @@ Upwork clients seeking:
 
 **Opening (10 sec)**
 - Terminal: Show project structure with `tree -L 2`
-- Voiceover: "Production RL trading system - training to live deployment"
+- Voiceover: "Research RL trading lab - training to controlled live validation"
 
 **Act 1: Training (45 sec)**
 ```bash
-uv run python experiments/train.py agent=ppo trainer.max_steps=50000
+uv run python experiments/train.py agent=ppo training.total_timesteps=50000
 ```
 - Show: Progress bar, real-time metrics (reward, returns)
 - Voiceover: "Train PPO, A2C, DQN, or custom Transformer agents"
@@ -55,7 +55,7 @@ uv run python examples/live_trading_example.py trade \
 
 **Closing (10 sec)**
 - Show: Architecture diagram from docs
-- Voiceover: "Clean architecture, type-safe, production-ready"
+- Voiceover: "Clean architecture, type-safe, and safety-gated for controlled operation"
 - Text overlay: Contact info
 
 ---
@@ -110,7 +110,7 @@ uv run python examples/live_trading_example.py trade \
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Caption:** "Enterprise Architecture: Training to Production"
+**Caption:** "Enterprise Architecture: Training to Controlled Execution"
 
 ### Image 6: Code Quality
 **What to capture:** VS Code with:
@@ -118,7 +118,7 @@ uv run python examples/live_trading_example.py trade \
 - Clean function signatures
 - Docstrings
 
-**Caption:** "8,000+ Lines of Production Code | Type-Safe | Tested"
+**Caption:** "8,000+ Lines of Typed, Tested Engineering Code"
 
 ### Image 7: Results/Metrics
 **What to capture:** MLflow metrics view showing:
@@ -139,7 +139,7 @@ uv run python examples/live_trading_example.py trade \
 tree -L 2 --dirsfirst
 
 # 2. Training with metrics
-uv run python experiments/train.py agent=ppo trainer.max_steps=10000
+uv run python experiments/train.py agent=ppo training.total_timesteps=10000
 
 # 3. MLflow UI
 mlflow ui --port 5000
@@ -166,7 +166,7 @@ cd notebooks && uv run jupyter lab
 1. **Not a gambling bot** - Research framework with proper ML validation
 2. **Safety-first** - Circuit breakers, rate limits, position controls
 3. **Reproducible** - Every experiment tracked with full configs
-4. **Production-ready** - Real Binance integration (testnet proven)
+4. **Controlled execution-ready** - Real Binance integration (testnet proven)
 5. **Clean architecture** - Domain-driven design, type safety
 6. **Flexible** - 8 agent types, 4 reward functions, 50+ configs
 
@@ -178,7 +178,7 @@ cd notebooks && uv run jupyter lab
 "RL Trading Systems | ML Engineering | Binance Integration"
 
 ### Bio Snippet
-"I build production-grade reinforcement learning trading systems. My latest project: an end-to-end RL trading lab with PPO/A2C/DQN agents, custom Transformer policies, MLflow tracking, and live Binance deployment with multi-layer safety controls. 8,000+ lines of clean, typed Python."
+"I build reinforcement learning trading systems with strong safety controls. My latest project is an end-to-end RL trading lab with PPO/A2C/DQN agents, custom Transformer policies, MLflow tracking, and controlled Binance testnet validation workflows. 8,000+ lines of clean, typed Python."
 
 ### Skills to Tag
 - Reinforcement Learning
