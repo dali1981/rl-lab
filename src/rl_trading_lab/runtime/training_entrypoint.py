@@ -14,6 +14,8 @@ from rl_trading_lab.application.use_cases.train_agent import (
     TrainingConfig as UseCaseTrainingConfig,
 )
 from rl_trading_lab.config import RootConfig
+from rl_trading_lab.infrastructure.adapters.gym_adapter import GymTradingEnvAdapter
+from rl_trading_lab.infrastructure.adapters.market_data_adapter import ParquetMarketDataAdapter
 from rl_trading_lab.infrastructure.adapters.mlflow_tracker import create_mlflow_tracker
 
 
@@ -33,6 +35,20 @@ def _extract_agent_settings(config: RootConfig) -> Tuple[str, Dict[str, Any]]:
     return policy, _drop_none_values(hyperparameters)
 
 
+def _build_market_data_adapter(data_frame: Any):
+    """Composition-root adapter wiring for market data."""
+    return ParquetMarketDataAdapter(df=data_frame)
+
+
+def _build_env_adapter(domain, randomize_start: bool, min_episode_length: int):
+    """Composition-root adapter wiring for gym environment."""
+    return GymTradingEnvAdapter(
+        domain=domain,
+        randomize_start=randomize_start,
+        min_episode_length=min_episode_length,
+    )
+
+
 def build_training_use_case(config: RootConfig) -> TrainAgentUseCase:
     """Assemble the canonical training use case with concrete services."""
     data_loader = ParquetDataLoader(
@@ -41,7 +57,11 @@ def build_training_use_case(config: RootConfig) -> TrainAgentUseCase:
         required_columns=config.env.required_columns,
     )
 
-    environment_service = EnvironmentService(data_loader=data_loader)
+    environment_service = EnvironmentService(
+        data_loader=data_loader,
+        market_data_factory=_build_market_data_adapter,
+        env_adapter_factory=_build_env_adapter,
+    )
 
     agent_service = AgentService(
         vec_normalize_enabled=config.env.vec_normalize.enabled,

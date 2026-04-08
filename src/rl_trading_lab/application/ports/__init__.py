@@ -16,10 +16,16 @@ from rl_trading_lab.application.ports.feature_engineering import (
     FeatureEngineeringPort,
     PassthroughFeatures,
 )
+from rl_trading_lab.application.ports.environment_factories import (
+    MarketDataAdapterFactory,
+    EnvAdapterFactory,
+)
 
 __all__ = [
     "ExperimentTrackerPort",
     "DataLoaderPort",
     "FeatureEngineeringPort",
     "PassthroughFeatures",
+    "MarketDataAdapterFactory",
+    "EnvAdapterFactory",
 ]
