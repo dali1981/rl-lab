@@ -102,13 +102,7 @@ if live_features != expected_features:
 
 ## Validation
 
-Before any live deployment:
-
-```bash
-uv run python examples/live_trading_example.py validate \
-  --model checkpoints/PPO_*/best_model/best_model.zip \
-  --days 1
-```
+Before any live deployment, use the `Pre-live validation surface` command from [docs/commands.md](commands.md).
 
 This verifies:
 - Data loading works

@@ -37,10 +37,46 @@ def test_run_pipeline_help_smoke() -> None:
     assert "Running canonical training entrypoint..." in result.stdout
 
 
+def test_live_trading_example_help_smoke() -> None:
+    result = _run([PYTHON, "examples/live_trading_example.py", "--help"])
+    assert result.returncode == 0, result.stderr
+    assert "Commands" in result.stdout
+
+
+def test_live_trading_example_validate_help_smoke() -> None:
+    result = _run([PYTHON, "examples/live_trading_example.py", "validate", "--help"])
+    assert result.returncode == 0, result.stderr
+    assert "Validate trading pipeline" in result.stdout
+
+
+def test_live_trading_example_trade_help_smoke() -> None:
+    result = _run([PYTHON, "examples/live_trading_example.py", "trade", "--help"])
+    assert result.returncode == 0, result.stderr
+    assert "Run live trading" in result.stdout
+
+
+def test_live_trading_example_analyze_help_smoke() -> None:
+    result = _run([PYTHON, "examples/live_trading_example.py", "analyze", "--help"])
+    assert result.returncode == 0, result.stderr
+    assert "Usage: live_trading_example.py analyze" in result.stdout
+
+
 def test_live_entrypoint_help_smoke() -> None:
     result = _run([PYTHON, "experiments/live_trading.py", "--help"])
     assert result.returncode == 0, result.stderr
     assert "Run live trading system." in result.stdout
+
+
+def test_mlflow_help_smoke() -> None:
+    result = _run([PYTHON, "-m", "mlflow", "--help"])
+    assert result.returncode == 0, result.stderr
+    assert "Usage: python -m mlflow" in result.stdout
+
+
+def test_jupyter_help_smoke() -> None:
+    result = _run([PYTHON, "-m", "jupyter", "--help"])
+    assert result.returncode == 0, result.stderr
+    assert "Jupyter: Interactive Computing" in result.stdout
 
 
 def test_short_canonical_training_smoke(tmp_path: Path) -> None:

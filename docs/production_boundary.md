@@ -46,33 +46,12 @@ For current operation in this repository, canonical execution surfaces are:
 
 ## Command matrix (current repository reality)
 
-Use these as the primary command surfaces when discussing supported modes.
+Use [docs/commands.md](commands.md) as the authoritative command source.
 
-### Research / Offline training / Evaluation
-
-```bash
-uv run python experiments/train.py --help
-```
-
-Typical execution (requires valid local data path in config):
-
-```bash
-uv run python experiments/train.py training.total_timesteps=1000
-```
-
-Notes:
-- `trainer.max_steps` is not a valid current override key.
-- `env.dataset=sample` is not a valid current override key.
-- Evaluation metrics are integrated in the training workflow rather than a separate production evaluator command.
-
-### Pre-live validation / Paper trading
-
-```bash
-uv run python examples/live_trading_example.py --help
-uv run python examples/live_trading_example.py validate --help
-uv run python examples/live_trading_example.py trade --help
-uv run python examples/live_trading_example.py analyze --help
-```
+Mode-to-command mapping:
+- Research / Offline training / Evaluation: use `Smoke test`, `Local training`, and `Evaluation` rows.
+- Pre-live validation / Paper trading: use `Pre-live validation surface`, `Paper trading surface`, and `Session analysis surface` rows.
+- MLflow and notebook operations: use `MLflow UI` and `Notebook inspection` rows.
 
 ## Failure model and safety gates
 
