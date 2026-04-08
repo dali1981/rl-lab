@@ -16,7 +16,7 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 
 from rl_trading_lab.agents.env_wrapper import EnvWrapperBuilder
 from rl_trading_lab.agents.callback_factory import CallbackFactory
-from rl_trading_lab.agents.sb3_agents import Trainer
+from rl_trading_lab.agents.trainer import Trainer
 from rl_trading_lab.config.agent import AgentConfig
 from rl_trading_lab.config.env import EnvConfig
 
