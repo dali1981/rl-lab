@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from rl_trading_lab.application.ports.data_loader import DataLoaderPort
 from rl_trading_lab.infrastructure.factories import create_data_loader
 
 
@@ -33,8 +34,7 @@ def _assert_frame_contract(df: pd.DataFrame) -> None:
 
 def test_data_loader_factory_resolves_parquet_port_contract() -> None:
     loader = _build_parquet_loader()
-    for method_name in ("load", "load_with_splits", "get_features"):
-        assert hasattr(loader, method_name), f"Loader missing {method_name}"
+    assert isinstance(loader, DataLoaderPort)
 
 
 def test_parquet_loader_contract_schema_types_and_time_ordering() -> None:
@@ -71,12 +71,20 @@ def test_parquet_loader_load_with_splits_matches_mode_loads() -> None:
 
 
 def test_entrypoints_and_use_cases_do_not_import_concrete_data_loaders() -> None:
-    targets = [
+    direct_targets = [
         ROOT / "experiments" / "train.py",
         ROOT / "run_pipeline.py",
         ROOT / "src" / "rl_trading_lab" / "runtime" / "training_entrypoint.py",
-        ROOT / "src" / "rl_trading_lab" / "application" / "use_cases" / "train_agent.py",
     ]
+    application_root = ROOT / "src" / "rl_trading_lab" / "application"
+    domain_root = ROOT / "src" / "rl_trading_lab" / "domain"
+    recursive_targets = [
+        path
+        for root in (application_root, domain_root)
+        for path in root.rglob("*.py")
+        if "ports" not in path.parts
+    ]
+    targets = [*direct_targets, *recursive_targets]
     forbidden_modules = {
         "rl_trading_lab.application.ports.data_loader",
         "rl_trading_lab.infrastructure.adapters.csv_data_loader",
@@ -86,6 +94,8 @@ def test_entrypoints_and_use_cases_do_not_import_concrete_data_loaders() -> None
     violations: list[str] = []
 
     for path in targets:
+        if not path.exists():
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
