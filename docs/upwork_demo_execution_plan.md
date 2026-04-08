@@ -37,15 +37,15 @@
 
 ## Execution Steps
 
+Command policy for this plan:
+- Use [docs/commands.md](commands.md) as the command source of truth.
+- This document references command-matrix rows instead of duplicating command strings.
+
 ### Phase 1: MLflow Screenshots (15 min)
 
 **Pre-check:** MLflow data is in `mlruns/` — no server needed to start, just the UI.
 
-```bash
-cd ~/trading_project/rl-trading-lab
-uv run mlflow ui --port 5000
-# Open http://localhost:5000
-```
+Use command matrix row: `MLflow UI`.
 
 **Capture 5 screenshots (save to `docs/assets/`):**
 
@@ -68,21 +68,10 @@ uv run mlflow ui --port 5000
 
 The `train.py` uses Hydra + the legacy `TradingEnv` which reads from a parquet file. Sample data exists.
 
-```bash
-cd ~/trading_project/rl-trading-lab
+Use command matrix row: `Local training`.
+Recommended override for this screenshot flow: append `agent=ppo`.
 
-# Quick PPO training on sample data (should complete in ~30-60 seconds)
-uv run python experiments/train.py \
-  data.train_data_path=sample_data/btcusdt_sample_10k.parquet \
-  training.total_timesteps=10000 \
-  agent=ppo
-```
-
-**If this fails** (Hydra config resolution, missing override keys, etc.), fall back to the CartPole example which is known-working:
-
-```bash
-uv run python examples/gym_cartpole_example.py
-```
+**If this fails** (Hydra config resolution, missing override keys, etc.), fall back to the CartPole example script (`examples/gym_cartpole_example.py`), which is known-working.
 
 **Capture:**
 - Terminal with progress bar, training metrics (reward, loss, etc.)
@@ -94,10 +83,7 @@ uv run python examples/gym_cartpole_example.py
 
 ### Phase 3: Notebook Visualization (15 min)
 
-```bash
-cd ~/trading_project/rl-trading-lab
-uv run jupyter lab notebooks/debug_episode.ipynb
-```
+Use command matrix row: `Notebook inspection`.
 
 **What to capture:**
 - The 5-panel chart (Price, Actions, Positions, Rewards, Portfolio Value)
@@ -112,17 +98,10 @@ uv run jupyter lab notebooks/debug_episode.ipynb
 
 **Requires:** Binance testnet API keys configured + data infrastructure running.
 
-```bash
-# Check if testnet config exists
-cat ~/.env 2>/dev/null | grep -i binance || echo "No Binance env found"
-```
+Check testnet credentials are present in your environment before running pre-live validation.
 
 If available:
-```bash
-uv run python examples/live_trading_example.py validate \
-  --model checkpoints/PPO_returns_20251028_143659/final_model.zip \
-  --days 1
-```
+Use command matrix row: `Pre-live validation surface`.
 
 **If not available:** Skip this. The MLflow + training + notebook screenshots are sufficient for a strong carousel. The live trading screenshot is high-impact but blocked on infrastructure.
 
@@ -219,13 +198,13 @@ Use Figma, Canva, or Gamma to create. Dark background (#1a1a2e or similar), mono
 
 Follow `DEMO_PLAN.md` in repo. Updated script:
 
-| Act | Duration | Content | Command |
+| Act | Duration | Content | Command source |
 |-----|----------|---------|---------|
-| 1 | 10s | Project structure | `tree -L 2 --dirsfirst` |
-| 2 | 45s | Training demo | `uv run python experiments/train.py agent=ppo training.total_timesteps=10000` |
-| 3 | 30s | MLflow dashboard | Browse `http://localhost:5000` — experiments, curves, comparison |
-| 4 | 30s | CartPole reuse demo | `uv run python examples/gym_cartpole_example.py` |
-| 5 | 30s | Notebook viz | Show 5-panel chart from `debug_episode.ipynb` |
+| 1 | 10s | Project structure | local shell utility command (`tree`) |
+| 2 | 45s | Training demo | command matrix row: `Local training` (+ `agent=ppo`) |
+| 3 | 30s | MLflow dashboard | command matrix row: `MLflow UI` |
+| 4 | 30s | CartPole reuse demo | run `examples/gym_cartpole_example.py` with the local Python environment |
+| 5 | 30s | Notebook viz | command matrix row: `Notebook inspection` |
 | 6 | 10s | Closing | Architecture diagram + "Production-ready RL framework" |
 
 **Total:** ~2.5 min. Record with QuickTime (Cmd+Shift+5) or OBS.

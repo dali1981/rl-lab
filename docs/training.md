@@ -19,20 +19,7 @@ This document covers the training workflow and checkpoint management system.
 
 ## Running Training
 
-### Standard Training
-
-```bash
-uv run python experiments/train.py
-```
-
-### With Custom Parameters
-
-```bash
-uv run python experiments/train.py \
-  agent=ppo \
-  env=sharpe \
-  training.total_timesteps=500000
-```
+Use the canonical training and evaluation commands from [docs/commands.md](commands.md).
 
 ---
 
@@ -133,23 +120,17 @@ Built-in callbacks for monitoring:
 
 ### MLflow UI
 
-```bash
-mlflow ui --port 5000
-# Open http://localhost:5000
-```
+Use the `MLflow UI` row in [docs/commands.md](commands.md).
 
 ### TensorBoard
 
-```bash
-tensorboard --logdir logs/
-# Open http://localhost:6006
-```
+TensorBoard usage is optional and environment-specific; prefer the canonical observability command surfaces in [docs/commands.md](commands.md).
 
 ---
 
 ## Best Practices
 
-1. **Start small**: Use `training.total_timesteps=1000` to verify setup
+1. **Start small**: Use the `Smoke test` row in [docs/commands.md](commands.md) to verify setup
 2. **Track everything**: MLflow logs all experiments automatically
 3. **Compare algorithms**: Try PPO, A2C, DQN to find best fit
 4. **Use validation**: Always evaluate on held-out data

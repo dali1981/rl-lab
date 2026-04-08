@@ -26,26 +26,9 @@ configs/
 
 ## Running Experiments
 
-### Basic Training
+Use the canonical CLI contract in [docs/commands.md](commands.md).
 
-```bash
-uv run python experiments/train.py
-```
-
-### Override Parameters
-
-```bash
-# Change algorithm
-uv run python experiments/train.py agent=a2c
-
-# Change reward function
-uv run python experiments/train.py env=sharpe
-
-# Override specific values
-uv run python experiments/train.py \
-  agent.hyperparameters.learning_rate=0.001 \
-  training.total_timesteps=500000
-```
+This document focuses on parameter semantics; command invocation examples are centralized in the command matrix.
 
 ---
 
@@ -74,18 +57,15 @@ uv run python experiments/train.py \
 |-----------|-------------|---------|
 | `training.total_timesteps` | Total training steps | `100000` |
 | `training.eval_freq` | Evaluation frequency | `10000` |
-| `training.checkpoint_freq` | Checkpoint frequency | `10000` |
+| `training.save_freq` | Checkpoint frequency | `10000` |
 
 ---
 
 ## Experiment Tracking
 
-All experiments are automatically logged to **MLflow**:
+All experiments are automatically logged to **MLflow**.
 
-```bash
-# View experiments
-mlflow ui --port 5000
-```
+Use the `MLflow UI` row in [docs/commands.md](commands.md) for the canonical launch command.
 
 Tracked items:
 - Hyperparameters
@@ -95,28 +75,16 @@ Tracked items:
 
 ---
 
-## Example Configurations
+## Example Override Sets
 
-### High-Frequency Training
+These are override fragments to apply to canonical commands from [docs/commands.md](commands.md):
 
-```bash
-uv run python experiments/train.py \
-  agent=ppo \
-  training.total_timesteps=1000000 \
-  agent.hyperparameters.n_steps=512
-```
-
-### Risk-Adjusted Optimization
-
-```bash
-uv run python experiments/train.py \
-  env=sharpe \
-  env.environment_params.commission_rate=0.002
-```
-
-### Quick Test Run
-
-```bash
-uv run python experiments/train.py \
-  training.total_timesteps=1000
-```
+- High-frequency training:
+  - `agent=ppo`
+  - `training.total_timesteps=1000000`
+  - `agent.hyperparameters.n_steps=512`
+- Risk-adjusted optimization:
+  - `env=sharpe`
+  - `env.environment_params.commission_rate=0.002`
+- Quick test run:
+  - `training.total_timesteps=1000`

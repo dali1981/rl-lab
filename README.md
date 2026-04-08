@@ -52,7 +52,7 @@ Clients typically receive a **scoped, simplified subset** of this codebase, tail
 
 ## Quick verification (60-second smoke test)
 
-Run a minimal training loop to verify the setup:
+Set up the repo, then run the canonical smoke command from the command matrix:
 
 ```bash
 git clone https://github.com/dali1981/rl-lab.git
@@ -61,18 +61,8 @@ git clone https://github.com/dali1981/rl-lab.git
 ```bash
 cd rl-lab; uv sync
 ```
-```bash
-uv run python experiments/train.py \
-  trainer.max_steps=1000 \
-  env.dataset=sample
-```
- 
-Expected outcome:
-- training loop starts successfully
-- metrics are logged to `mlruns/`
-- a checkpoint is written to `checkpoints/`
 
-This confirms the system is wired correctly.
+Use: [docs/commands.md](docs/commands.md) → `Smoke test (clean install)`
 
 
 ## Repository structure (high-level)
@@ -97,6 +87,7 @@ This confirms the system is wired correctly.
 
 ## Documentation
 
+- [Canonical command matrix](docs/commands.md) (authoritative)
 - [Production boundary & supported modes](docs/production_boundary.md) (authoritative)
 - [Canonical runtime execution path](docs/runtime_path.md) (authoritative)
 - [Architecture rules](docs/architecture_rules.md) (authoritative)

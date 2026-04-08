@@ -46,13 +46,13 @@ All top-level entrypoints in `experiments/`, `run_pipeline.py`, and `examples/` 
 |---|---|---|
 | `experiments/train.py` | Canonical core runtime path | Uses Hydra config and routes orchestration through `TrainAgentUseCase` and application services. |
 | `run_pipeline.py` | Canonical wrapper path | Optional Kedro pre-step wrapper that delegates training execution to canonical `experiments/train.py`. |
-| `experiments/live_trading.py` | Intentionally standalone demo/integration (deprecated warning on invoke) | Optional live integration runner wiring real-time components directly; not canonical core domain/runtime path. |
-| `experiments/validate_data_pipeline.py` | Intentionally standalone demo/integration (deprecated warning on invoke) | Standalone data-pipeline validation harness for operational checks. |
-| `experiments/validate_live.py` | Intentionally standalone demo/integration (deprecated warning on invoke) | Standalone end-to-end live pipeline validation harness. |
-| `experiments/test_one_trade_mode.py` | Intentionally standalone demo/legacy harness (deprecated warning on invoke) | Standalone script targeting legacy environment behavior verification. |
-| `experiments/test_transformer.py` | Intentionally standalone demo/research harness (deprecated warning on invoke) | Standalone research harness for transformer policy compatibility checks. |
-| `examples/live_trading_example.py` | Intentionally standalone demo/integration (deprecated warning on invoke) | Demonstration CLI for testnet/live validation workflows; optional integration surface. |
-| `examples/gym_cartpole_example.py` | Intentionally standalone demo (deprecated warning on invoke) | Reusability showcase for trainer components in non-trading Gym environment. |
+| `experiments/live_trading.py` | Intentionally standalone demo/integration wrapper | Optional live integration runner; not canonical core domain/runtime path. |
+| `experiments/validate_data_pipeline.py` | Intentionally standalone demo/integration wrapper | Standalone data-pipeline validation harness for operational checks. |
+| `experiments/validate_live.py` | Intentionally standalone demo/integration wrapper | Standalone end-to-end live pipeline validation harness. |
+| `experiments/test_one_trade_mode.py` | Intentionally standalone demo/legacy harness | Standalone script targeting legacy environment behavior verification. |
+| `experiments/test_transformer.py` | Intentionally standalone demo/research harness | Standalone research harness for transformer policy compatibility checks. |
+| `examples/live_trading_example.py` | Intentionally standalone demo/integration surface | Demonstration CLI for testnet/live validation workflows; optional integration surface. |
+| `examples/gym_cartpole_example.py` | Intentionally standalone demo surface | Reusability showcase for trainer components in non-trading Gym environment. |
 
 ## Canonical vs non-canonical boundary
 
@@ -64,7 +64,7 @@ CLI -> config -> use_case -> services -> domain -> adapters
 
 Non-canonical paths are allowed only when explicitly demo/integration-oriented and clearly documented as optional surfaces.
 
-Compatibility/demo entrypoints must emit `DeprecationWarning` when invoked.
+Compatibility/demo entrypoints may emit warnings, but warning behavior is not the canonical classification signal.
 
 ## DAL-134 deprecated bypass allowlist
 
@@ -90,18 +90,8 @@ Runtime Path Reference: docs/runtime_path.md
 
 ## Smoke command surfaces (current)
 
-These command surfaces are currently valid and used for runtime-path inspection:
-
-```bash
-uv run python experiments/train.py --help
-uv run python run_pipeline.py --help
-uv run python experiments/live_trading.py --help
-uv run python experiments/validate_data_pipeline.py --help
-uv run python experiments/validate_live.py --help
-uv run python examples/live_trading_example.py --help
-```
+Use [docs/commands.md](commands.md) as the authoritative command matrix for runtime-path smoke surfaces.
 
 Interpretation:
 - Presence of command/help surface does not imply canonical status.
 - Canonical status is determined by architecture flow and boundary compliance, not by script availability.
-- `DeprecationWarning` on demo/integration entrypoints is expected and indicates non-canonical status by design.
