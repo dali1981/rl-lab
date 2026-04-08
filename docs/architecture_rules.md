@@ -2,7 +2,7 @@
 
 This document defines the checkable architecture rules for RL Trading Lab.
 
-Scope date: April 8, 2026.
+Scope date: April 9, 2026.
 
 Use this file as the baseline for all architecture enforcement tickets in the `RL Trading Lab — Production Hardening` project.
 
@@ -114,10 +114,15 @@ Canonical environment declaration:
   - `src/rl_trading_lab/infrastructure/adapters/gym_adapter.py`
 - Legacy monolith `src/rl_trading_lab/environment/trading_env.py` is read-only compatibility surface.
 - New environment behavior/features must target canonical path only.
+- Legacy compatibility harnesses (for example `experiments/test_one_trade_mode.py`) must:
+  - be explicitly marked deprecated,
+  - emit `DeprecationWarning`,
+  - and remain outside canonical command matrix surfaces.
 
 Migration note:
 - DAL-132 declares canonical path and deprecates legacy path for new development.
-- DAL-136 owns legacy environment removal timing.
+- DAL-140 adds runtime `DeprecationWarning` on `TradingEnv` instantiation.
+- Removal milestone target for legacy `TradingEnv`: June 30, 2026 (post DAL-144 enforcement wave).
 
 Check by inspection:
 - feature tickets do not introduce net-new capabilities in `environment/`.
@@ -127,7 +132,7 @@ Concrete check commands:
 
 ```bash
 rg -n "class TradingDomain|class GymTradingEnvAdapter" src/rl_trading_lab/domain/trading_domain.py src/rl_trading_lab/infrastructure/adapters/gym_adapter.py
-rg -n "DEPRECATED LEGACY ENVIRONMENT|read-only compatibility surface|Do not add new features here" src/rl_trading_lab/environment/trading_env.py
+rg -n "DEPRECATED LEGACY ENVIRONMENT|read-only compatibility surface|Do not add new features here|Removal milestone|DeprecationWarning" src/rl_trading_lab/environment/trading_env.py
 ```
 
 Expected:
