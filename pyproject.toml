@@ -76,5 +76,6 @@ warn_unused_configs = true
 [dependency-groups]
 dev = [
     "jupyter>=1.1.1",
+    "nbstripout>=0.9.1",
     "pytest>=8.4.2",
 ]
