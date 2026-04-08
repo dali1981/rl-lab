@@ -1,6 +1,15 @@
 """
-Trading Environment for RL agents.
-Compatible with Stable-Baselines3 and Gymnasium.
+DEPRECATED LEGACY ENVIRONMENT (read-only)
+
+`TradingEnv` is the legacy monolithic environment implementation.
+Canonical environment runtime is now:
+`TradingDomain` + `GymTradingEnvAdapter`
+(`src/rl_trading_lab/domain/trading_domain.py` +
+ `src/rl_trading_lab/infrastructure/adapters/gym_adapter.py`).
+
+This module remains for compatibility during migration and should not receive
+new feature development. See DAL-132 (canonical declaration) and DAL-136
+(legacy environment retirement).
 """
 
 import logging
@@ -25,13 +34,21 @@ class Action(IntEnum):
 
 class TradingEnv(gym.Env):
     """
-    A trading environment for RL agents.
+    DEPRECATED legacy trading environment for RL agents.
+
+    Canonical path:
+    `TradingDomain` + `GymTradingEnvAdapter`
 
     Features:
     - Discrete or continuous action space
     - Configurable reward functions
     - Transaction costs and slippage
     - Position tracking
+
+    Migration note:
+    - Treat this class as read-only compatibility surface.
+    - Do not add new features here.
+    - Route new development to the canonical domain+adapter path.
     """
 
     metadata = {'render_modes': ['human']}

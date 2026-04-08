@@ -44,6 +44,16 @@ The system is structured around clear separation of concerns:
 - **Reproducibility over ad-hoc scripts** - Every experiment is tracked and reproducible
 - **Safety-first deployment** - Circuit breakers, position limits, and risk controls for live trading
 
+### Canonical Environment Implementation
+
+Canonical environment runtime:
+- `TradingDomain` (`src/rl_trading_lab/domain/trading_domain.py`)
+- `GymTradingEnvAdapter` (`src/rl_trading_lab/infrastructure/adapters/gym_adapter.py`)
+
+Legacy path:
+- `src/rl_trading_lab/environment/trading_env.py` is deprecated/read-only compatibility surface.
+- No new environment features should be added to the legacy path.
+
 ---
 
 ## Component Overview
@@ -62,7 +72,7 @@ Raw Ticks → Dollar Volume Bars → Technical Indicators → Z-Score Normalizat
 
 | Component | Purpose |
 |-----------|---------|
-| `TradingEnv` | Gym-compatible environment with configurable rewards |
+| `TradingDomain` + `GymTradingEnvAdapter` | Canonical environment runtime and Gymnasium integration |
 | `SB3Agents` | Wrapper for Stable-Baselines3 algorithms |
 | `CheckpointManager` | Model persistence with embedded configs |
 | `MLflowCallback` | Experiment tracking and metrics logging |
@@ -108,7 +118,7 @@ rl-trading-lab/
 
 ```
 1. Load historical data (Parquet)
-2. Initialize TradingEnv with features
+2. Initialize TradingDomain and wrap with GymTradingEnvAdapter
 3. Train agent with SB3
 4. Log metrics to MLflow
 5. Save checkpoint with embedded config

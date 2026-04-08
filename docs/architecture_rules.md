@@ -102,9 +102,31 @@ Legacy environment path (`src/rl_trading_lab/environment/`) is treated as transi
 - only stability fixes or migration-enabling changes,
 - net-new architecture work must target domain/application/infrastructure path.
 
+Canonical environment declaration:
+- Canonical implementation is `TradingDomain` + `GymTradingEnvAdapter`:
+  - `src/rl_trading_lab/domain/trading_domain.py`
+  - `src/rl_trading_lab/infrastructure/adapters/gym_adapter.py`
+- Legacy monolith `src/rl_trading_lab/environment/trading_env.py` is read-only compatibility surface.
+- New environment behavior/features must target canonical path only.
+
+Migration note:
+- DAL-132 declares canonical path and deprecates legacy path for new development.
+- DAL-136 owns legacy environment removal timing.
+
 Check by inspection:
 - feature tickets do not introduce net-new capabilities in `environment/`.
 - migration/enforcement tickets move behavior toward domain/use-case/adapters flow.
+
+Concrete check commands:
+
+```bash
+rg -n "class TradingDomain|class GymTradingEnvAdapter" src/rl_trading_lab/domain/trading_domain.py src/rl_trading_lab/infrastructure/adapters/gym_adapter.py
+rg -n "DEPRECATED LEGACY ENVIRONMENT|read-only compatibility surface|Do not add new features here" src/rl_trading_lab/environment/trading_env.py
+```
+
+Expected:
+- canonical classes are present,
+- legacy file contains explicit deprecation/read-only declaration.
 
 ### Rule 6: Live trading is optional integration, not core domain
 
