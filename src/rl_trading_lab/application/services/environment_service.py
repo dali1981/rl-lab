@@ -52,7 +52,7 @@ class EnvironmentService:
     - Consistent environment creation for train/eval/test
 
     Example:
-        >>> data_loader = ParquetDataLoader(val_split=0.1, test_split=0.1)
+        >>> data_loader: DataLoaderPort = ...
         >>> env_service = EnvironmentService(
         ...     data_loader=data_loader,
         ...     market_data_factory=build_market_data_adapter,
