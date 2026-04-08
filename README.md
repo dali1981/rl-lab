@@ -91,6 +91,7 @@ Use: [docs/commands.md](docs/commands.md) → `Smoke test (clean install)`
 - [Production boundary & supported modes](docs/production_boundary.md) (authoritative)
 - [Canonical runtime execution path](docs/runtime_path.md) (authoritative)
 - [Architecture rules](docs/architecture_rules.md) (authoritative)
+- [Observability contract](docs/observability.md) (authoritative)
 - [Architecture overview](docs/architecture.md)
 - [Configuration & experiments](docs/configuration.md)
 - [Training & checkpoints](docs/training.md)
