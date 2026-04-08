@@ -16,6 +16,7 @@ Usage:
 import sys
 from pathlib import Path
 import logging
+import warnings
 
 import torch
 import numpy as np
@@ -33,6 +34,13 @@ from rl_trading_lab.models.transformer_policy import (
     SinusoidalPositionalEncoding,
 )
 from stable_baselines3 import PPO
+
+warnings.simplefilter("default", DeprecationWarning)
+warnings.warn(
+    "This entrypoint is a research compatibility harness and not part of the canonical runtime path. "
+    "Use experiments/train.py for canonical core workflows.",
+    DeprecationWarning,
+)
 
 
 def test_positional_encoding():

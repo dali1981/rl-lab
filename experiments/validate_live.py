@@ -19,6 +19,7 @@ Example usage:
 
 import sys
 import logging
+import warnings
 from pathlib import Path
 from datetime import datetime, timedelta
 import pandas as pd
@@ -46,6 +47,13 @@ logger = logging.getLogger(__name__)
 
 app = typer.Typer()
 console = Console()
+
+warnings.simplefilter("default", DeprecationWarning)
+warnings.warn(
+    "This entrypoint is an optional integration surface and not part of the canonical runtime path. "
+    "Use experiments/train.py for canonical core workflows.",
+    DeprecationWarning,
+)
 
 
 def print_header(title: str):

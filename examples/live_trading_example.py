@@ -34,6 +34,7 @@ import asyncio
 import logging
 import os
 import sys
+import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -74,6 +75,13 @@ console = Console()
 
 # Initialize Typer app
 app = typer.Typer(help="Live Trading Example with RL Models")
+
+warnings.simplefilter("default", DeprecationWarning)
+warnings.warn(
+    "This entrypoint is an optional demo/integration surface and not part of the canonical runtime path. "
+    "Use experiments/train.py for canonical core workflows.",
+    DeprecationWarning,
+)
 
 
 # ============================================================================

@@ -15,6 +15,7 @@ Usage:
 import sys
 from pathlib import Path
 import logging
+import warnings
 import pandas as pd
 import numpy as np
 from rich.console import Console
@@ -33,6 +34,13 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 console = Console()
 app = typer.Typer()
+
+warnings.simplefilter("default", DeprecationWarning)
+warnings.warn(
+    "This entrypoint is an optional integration surface and not part of the canonical runtime path. "
+    "Use experiments/train.py for canonical core workflows.",
+    DeprecationWarning,
+)
 
 
 def validate_data_loading(symbol: str, days: int):

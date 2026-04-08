@@ -27,6 +27,7 @@ Example usage:
 import asyncio
 import logging
 import sys
+import warnings
 from pathlib import Path
 from typing import Dict, List
 import yaml
@@ -56,6 +57,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = typer.Typer()
+
+warnings.simplefilter("default", DeprecationWarning)
+warnings.warn(
+    "This entrypoint is an optional integration surface and not part of the canonical runtime path. "
+    "Use experiments/train.py for canonical core workflows.",
+    DeprecationWarning,
+)
 
 
 class LiveTradingSystem:
