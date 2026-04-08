@@ -12,6 +12,14 @@ As of April 8, 2026, this repository is a research and engineering lab with cont
 | Beta/controlled | Functional but requires operator control, explicit gating, and close monitoring. |
 | Internal/experimental | Useful for development, demos, and architecture exploration; not a supported production surface. |
 
+### Internal/experimental surfaces in this repository
+
+The `internal/experimental` tier maps to concrete, non-authoritative surfaces such as:
+- demo collateral and marketing-oriented plans (for example `DEMO_PLAN.md`, `docs/upwork_demo_execution_plan.md`),
+- architecture review/refactor analysis docs (for example `docs/ddd_clean_architecture_review.md`, `docs/refactor_2024-11-29.md`, `docs/rl_module_reusability_assessment.md`),
+- debugging and exploratory analysis notes (for example `docs/debugging/*`, notebooks under `notebooks/`),
+- convenience wrappers or exploratory orchestration paths not treated as canonical runtime contracts (for example `run_pipeline.py`).
+
 ## Supported modes
 
 | Mode | Tier | Supported today | Gated constraints | Prerequisites |
@@ -20,7 +28,7 @@ As of April 8, 2026, this repository is a research and engineering lab with cont
 | Offline training | Production-ready | Yes, through the canonical training path. | Requires valid local dataset path and config compatibility; command overrides must match current Hydra schema. | `uv sync`, data file available at configured path, write access for checkpoints/logs. |
 | Evaluation | Production-ready | Yes, as part of canonical training/eval workflow and offline validation surfaces. | Standalone "production evaluator" service is not provided; evaluation is bounded by current scripts and checkpoint compatibility. | Trained checkpoint, compatible feature/config schema, evaluation data availability. |
 | Paper trading (testnet) | Beta/controlled | Yes, via `examples/live_trading_example.py trade` on Binance testnet. | Human-in-the-loop operation required; explicit drawdown/position/rate limits required; testnet only by default policy. | Binance testnet credentials, validated model, safety guard parameters, active monitoring session. |
-| Live validation | Beta/controlled | Yes, via historical pipeline validation (`validate`) and controlled integration checks. | Validation is pre-live gating only; passing validation is not permission for unattended live execution. | Trained model + optional VecNormalize, historical data access, feature compatibility checks. |
+| Pre-live validation (historical/integration) | Beta/controlled | Yes, via historical pipeline validation (`validate`) and controlled integration checks. | Validation is pre-live gating only; passing validation is not permission for unattended live execution. | Trained model + optional VecNormalize, historical data access, feature compatibility checks. |
 
 ## Canonical runtime path
 
@@ -57,7 +65,7 @@ Notes:
 - `env.dataset=sample` is not a valid current override key.
 - Evaluation metrics are integrated in the training workflow rather than a separate production evaluator command.
 
-### Live validation / Paper trading
+### Pre-live validation / Paper trading
 
 ```bash
 uv run python examples/live_trading_example.py --help
@@ -111,6 +119,6 @@ The following are not supported as production guarantees in this repository:
 
 ## Boundary summary
 
-- Supported now: research, offline training/evaluation, controlled paper/live-validation workflows.
+- Supported now: research, offline training/evaluation, controlled paper/pre-live-validation workflows.
 - Not supported now: unattended production live trading.
 - Any move from beta/controlled toward production-ready live execution requires dedicated hardening work, explicit runbooks, and expanded operational controls beyond current repository scope.
