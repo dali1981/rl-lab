@@ -1,5 +1,9 @@
 # Architecture Overview
 
+Related policy docs:
+- [Architecture rules](architecture_rules.md) (authoritative enforcement baseline)
+- [Production boundary & supported modes](production_boundary.md)
+
 The system is structured around clear separation of concerns:
 
 ```
