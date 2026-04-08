@@ -1,7 +1,12 @@
 # MLflow and TensorBoard Integration
 
 **Date**: 2025-10-27
-**Status**: ✅ Implemented
+**Status**: Historical implementation note (pre-trainer consolidation)
+
+> **Canonical runtime note (April 9, 2026):**
+> - Primary training path is `experiments/train.py` -> `runtime/training_entrypoint.py` -> `TrainAgentUseCase`.
+> - Authoritative trainer surfaces are `src/rl_trading_lab/agents/trainer.py` and `src/rl_trading_lab/agents/trainer_factory.py`.
+> - Any `sb3_agents.py` references in this document are legacy context, not the current primary interface.
 
 ## Overview
 
@@ -44,7 +49,7 @@ class MLflowOutputFormat(KVWriter):
 
 ---
 
-### 2. Logger Setup (`src/agents/sb3_agents.py`)
+### 2. Logger Setup (legacy path: `src/agents/sb3_agents.py`)
 
 Added `_setup_logger()` method to configure both MLflow and TensorBoard:
 
@@ -79,7 +84,7 @@ def _setup_logger(self):
 
 ---
 
-### 3. Trading Metrics Logging (`src/agents/sb3_agents.py`)
+### 3. Trading Metrics Logging (legacy path: `src/agents/sb3_agents.py`)
 
 Updated `TradingMetricsCallback` to log trading-specific metrics:
 

@@ -2,13 +2,14 @@
 
 This document is the single source of truth for RL Trading Lab CLI commands.
 
-Scope date: April 8, 2026.
+Scope date: April 9, 2026.
 
 ## Contract
 
 - Use only the commands in this matrix for user-facing docs.
 - Hydra overrides must use current keys (for example `training.total_timesteps`, `data.train_data_path`).
 - Deprecated legacy override variants are not part of the supported contract.
+- Canonical trainer path for these commands is `experiments/train.py` -> runtime/use-case orchestration with `trainer.py` + `trainer_factory.py`; `sb3_agents.py` is compatibility-only.
 
 ## Command Matrix
 

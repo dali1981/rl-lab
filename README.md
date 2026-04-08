@@ -64,6 +64,17 @@ cd rl-lab; uv sync
 
 Use: [docs/commands.md](docs/commands.md) → `Smoke test (clean install)`
 
+## Training interface (canonical)
+
+Canonical training orchestration is:
+
+`experiments/train.py` -> `runtime/training_entrypoint.py` -> `TrainAgentUseCase`
+
+Trainer implementation/composition surfaces:
+- authoritative trainer implementation: `src/rl_trading_lab/agents/trainer.py`
+- project-specific wiring: `src/rl_trading_lab/agents/trainer_factory.py`
+- `src/rl_trading_lab/agents/sb3_agents.py` is compatibility-only and not the primary trainer interface
+
 
 ## Repository structure (high-level)
 
