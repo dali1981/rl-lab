@@ -10,9 +10,14 @@ Canonical environment runtime is now:
 This module remains for compatibility during migration and should not receive
 new feature development. See DAL-132 (canonical declaration) and DAL-136
 (legacy environment retirement).
+
+Removal milestone:
+- Legacy `TradingEnv` compatibility path is scheduled for removal by June 30, 2026
+  (after DAL-144 enforcement wave closes remaining responsibility overlaps).
 """
 
 import logging
+import warnings
 import numpy as np
 import pandas as pd
 import gymnasium as gym
@@ -49,6 +54,7 @@ class TradingEnv(gym.Env):
     - Treat this class as read-only compatibility surface.
     - Do not add new features here.
     - Route new development to the canonical domain+adapter path.
+    - Planned removal milestone: June 30, 2026 (post DAL-144 enforcement wave).
     """
 
     metadata = {'render_modes': ['human']}
@@ -71,6 +77,12 @@ class TradingEnv(gym.Env):
         price_column: str = "close",
         one_trade_mode: bool = False,
     ):
+        warnings.warn(
+            "TradingEnv is deprecated and compatibility-only; use TradingDomain + "
+            "GymTradingEnvAdapter (legacy path scheduled for removal by June 30, 2026).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__()
 
         # Store configuration

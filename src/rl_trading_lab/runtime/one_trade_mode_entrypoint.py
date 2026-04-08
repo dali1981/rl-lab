@@ -2,6 +2,11 @@
 """
 Quick test script to verify ONE_TRADE mode functionality.
 
+DEPRECATED compatibility harness:
+- Uses legacy `TradingEnv` path for migration checks only.
+- Not part of canonical runtime path.
+- Planned removal milestone: June 30, 2026.
+
 Tests that:
 1. Episode terminates after first position close when one_trade_mode=True
 2. Episode continues normally when one_trade_mode=False
@@ -9,6 +14,7 @@ Tests that:
 
 import numpy as np
 import pandas as pd
+import warnings
 
 from rl_trading_lab.environment.trading_env import TradingEnv, Action
 
@@ -149,6 +155,12 @@ def test_one_trade_mode_disabled():
 
 def main():
     """Run all tests"""
+    warnings.warn(
+        "one_trade_mode_entrypoint is a deprecated compatibility harness and is "
+        "scheduled for removal by June 30, 2026.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     print("=" * 60)
     print("Testing ONE_TRADE Mode Implementation")
     print("=" * 60)
