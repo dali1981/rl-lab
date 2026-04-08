@@ -66,6 +66,18 @@ Non-canonical paths are allowed only when explicitly demo/integration-oriented a
 
 Compatibility/demo entrypoints must emit `DeprecationWarning` when invoked.
 
+## DAL-134 deprecated bypass allowlist
+
+For DAL-134 enforcement, direct integration imports in `experiments/` are allowed only for these explicit deprecated paths:
+
+- `experiments/live_trading.py`
+- `experiments/validate_data_pipeline.py`
+- `experiments/validate_live.py`
+- `experiments/test_one_trade_mode.py`
+- `experiments/test_transformer.py`
+
+Any new or existing `experiments/` entrypoint outside this list that imports direct integration surfaces (`rl_trading_lab.live`, `rl_trading_lab.data`, `rl_trading_lab.infrastructure`, or legacy `environment` paths) is out of compliance.
+
 ## Reference for enforcement
 
 DAL-127 (enforcement) should use this document as the source of truth for which entrypoints require migration.

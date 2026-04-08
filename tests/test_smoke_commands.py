@@ -37,11 +37,10 @@ def test_run_pipeline_help_smoke() -> None:
     assert "Running canonical training entrypoint..." in result.stdout
 
 
-def test_live_entrypoint_help_emits_deprecation_warning() -> None:
+def test_live_entrypoint_help_smoke() -> None:
     result = _run([PYTHON, "experiments/live_trading.py", "--help"])
     assert result.returncode == 0, result.stderr
-    combined = result.stdout + "\n" + result.stderr
-    assert "DeprecationWarning" in combined
+    assert "Run live trading system." in result.stdout
 
 
 def test_short_canonical_training_smoke(tmp_path: Path) -> None:

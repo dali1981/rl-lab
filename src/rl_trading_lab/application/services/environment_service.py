@@ -14,6 +14,10 @@ from typing import List, Optional
 import gymnasium as gym
 
 from rl_trading_lab.application.ports.data_loader import DataLoaderPort
+from rl_trading_lab.application.ports.environment_factories import (
+    EnvAdapterFactory,
+    MarketDataAdapterFactory,
+)
 from rl_trading_lab.domain.trading_domain import TradingDomain, TradingDomainConfig
 from rl_trading_lab.domain.services.position_sizing import (
     FixedPercentagePositionSizing,
@@ -29,8 +33,6 @@ from rl_trading_lab.domain.services.risk_management import (
     RiskManagementService,
     StandardRiskManagement,
 )
-from rl_trading_lab.infrastructure.adapters.market_data_adapter import ParquetMarketDataAdapter
-from rl_trading_lab.infrastructure.adapters.gym_adapter import GymTradingEnvAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +53,11 @@ class EnvironmentService:
 
     Example:
         >>> data_loader = ParquetDataLoader(val_split=0.1, test_split=0.1)
-        >>> env_service = EnvironmentService(data_loader)
+        >>> env_service = EnvironmentService(
+        ...     data_loader=data_loader,
+        ...     market_data_factory=build_market_data_adapter,
+        ...     env_adapter_factory=build_env_adapter,
+        ... )
         >>>
         >>> train_env = env_service.create_training_env(
         ...     data_path=Path("data/btc_features.parquet"),
@@ -61,14 +67,23 @@ class EnvironmentService:
         ... )
     """
 
-    def __init__(self, data_loader: DataLoaderPort):
+    def __init__(
+        self,
+        data_loader: DataLoaderPort,
+        market_data_factory: MarketDataAdapterFactory,
+        env_adapter_factory: EnvAdapterFactory,
+    ):
         """
         Initialize the environment service.
 
         Args:
             data_loader: Port for loading market data
+            market_data_factory: Factory creating MarketDataPort adapters
+            env_adapter_factory: Factory creating gym-compatible env adapters
         """
         self._data_loader = data_loader
+        self._market_data_factory = market_data_factory
+        self._env_adapter_factory = env_adapter_factory
 
     def create_training_env(
         self,
@@ -231,8 +246,8 @@ class EnvironmentService:
         df = self._data_loader.load(data_path, mode=mode)
         logger.info(f"Loaded {mode} data: {len(df)} rows")
 
-        # Create market data adapter
-        market_data = ParquetMarketDataAdapter(df)
+        # Create market data adapter through injected factory
+        market_data = self._market_data_factory(df)
 
         # Create or use provided domain services
         pos_sizing = position_sizing or FixedPercentagePositionSizing()
@@ -271,11 +286,11 @@ class EnvironmentService:
             risk_manager=risk_mgmt,
         )
 
-        # Wrap in gym adapter
-        env = GymTradingEnvAdapter(
-            domain=domain,
-            randomize_start=randomize_start,
-            min_episode_length=min_episode_length,
+        # Wrap in gym adapter through injected factory
+        env = self._env_adapter_factory(
+            domain,
+            randomize_start,
+            min_episode_length,
         )
 
         logger.info(
