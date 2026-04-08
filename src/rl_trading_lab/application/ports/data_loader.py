@@ -7,11 +7,12 @@ from the application logic.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 
 import pandas as pd
 
 
+@runtime_checkable
 class DataLoaderPort(Protocol):
     """
     Port for loading market data.

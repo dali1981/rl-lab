@@ -215,6 +215,30 @@ Expected:
 - second command has one match,
 - third command has no matches (or compatibility-only legacy references under controlled migration).
 
+### Rule 10: Data loading must route through DataLoaderPort + factory
+
+Core runtime and use-case surfaces must not import concrete data loader classes.
+Loader resolution must happen through factory boundary, with application services
+consuming `DataLoaderPort`.
+
+Check by inspection:
+- entrypoints/use-cases do not import `ParquetDataLoader`/`CsvDataLoader`/`BinanceDataAdapter`,
+- runtime composition resolves loader via `create_data_loader(...)`,
+- `EnvironmentService` receives `DataLoaderPort` and calls `.load(...)`.
+
+Concrete check commands:
+
+```bash
+rg -n "from rl_trading_lab\\.application\\.ports\\.data_loader import ParquetDataLoader|from rl_trading_lab\\.infrastructure\\.adapters\\.csv_data_loader import CsvDataLoader|from rl_trading_lab\\.data\\.binance_adapter import BinanceDataAdapter" experiments run_pipeline.py src/rl_trading_lab/runtime src/rl_trading_lab/application/use_cases
+rg -n "create_data_loader\\(" src/rl_trading_lab/runtime/training_entrypoint.py
+rg -n "DataLoaderPort|_data_loader\\.load\\(" src/rl_trading_lab/application/services/environment_service.py
+```
+
+Expected:
+- first command has no matches,
+- second command has at least one match in canonical runtime composition,
+- third command has matches confirming port-based loading in application service.
+
 ## Enforcement ticket policy
 
 All architecture enforcement tickets in this project should:

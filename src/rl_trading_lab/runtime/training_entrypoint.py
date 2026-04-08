@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-from rl_trading_lab.application.ports.data_loader import ParquetDataLoader
 from rl_trading_lab.application.services.agent_service import AgentService
 from rl_trading_lab.application.services.checkpoint_service import CheckpointService
 from rl_trading_lab.application.services.environment_service import EnvironmentService
@@ -17,6 +16,7 @@ from rl_trading_lab.config import RootConfig
 from rl_trading_lab.infrastructure.adapters.gym_adapter import GymTradingEnvAdapter
 from rl_trading_lab.infrastructure.adapters.market_data_adapter import ParquetMarketDataAdapter
 from rl_trading_lab.infrastructure.adapters.mlflow_tracker import create_mlflow_tracker
+from rl_trading_lab.infrastructure.factories import create_data_loader
 
 
 def _drop_none_values(value: Any) -> Any:
@@ -51,7 +51,8 @@ def _build_env_adapter(domain, randomize_start: bool, min_episode_length: int):
 
 def build_training_use_case(config: RootConfig) -> TrainAgentUseCase:
     """Assemble the canonical training use case with concrete services."""
-    data_loader = ParquetDataLoader(
+    data_loader = create_data_loader(
+        source_type=config.data.source_type,
         val_split=config.data.val_split,
         test_split=config.data.test_split,
         required_columns=config.env.required_columns,

@@ -102,10 +102,10 @@ class TrainAgentUseCase:
 
     Example:
         >>> from rl_trading_lab.application.use_cases import TrainAgentUseCase
-        >>> from rl_trading_lab.application.ports.data_loader import ParquetDataLoader
+        >>> from rl_trading_lab.application.ports.data_loader import DataLoaderPort
         >>>
         >>> # Setup dependencies
-        >>> data_loader = ParquetDataLoader()
+        >>> data_loader: DataLoaderPort = ...
         >>> env_service = EnvironmentService(data_loader)
         >>> agent_service = AgentService()
         >>> checkpoint_service = CheckpointService(save_path=Path("models"))
