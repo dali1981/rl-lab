@@ -98,6 +98,7 @@ This confirms the system is wired correctly.
 ## Documentation
 
 - [Production boundary & supported modes](docs/production_boundary.md) (authoritative)
+- [Canonical runtime execution path](docs/runtime_path.md) (authoritative)
 - [Architecture rules](docs/architecture_rules.md) (authoritative)
 - [Architecture overview](docs/architecture.md)
 - [Configuration & experiments](docs/configuration.md)
