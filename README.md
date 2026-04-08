@@ -97,6 +97,7 @@ This confirms the system is wired correctly.
 
 ## Documentation
 
+- [Production boundary & supported modes](docs/production_boundary.md) (authoritative)
 - [Architecture overview](docs/architecture.md)
 - [Configuration & experiments](docs/configuration.md)
 - [Training & checkpoints](docs/training.md)
