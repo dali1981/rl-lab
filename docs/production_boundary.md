@@ -4,31 +4,49 @@ This document is the authoritative boundary for what RL Trading Lab supports tod
 
 As of April 8, 2026, this repository is a research and engineering lab with controlled execution demonstrations. It is not an unattended production trading system.
 
-## Tier definitions
+## Status definitions
 
-| Tier | Meaning |
+| Status | Meaning |
 |---|---|
-| Production-ready | Stable and supported for intended lab usage in this repository with clear operating constraints. |
-| Beta/controlled | Functional but requires operator control, explicit gating, and close monitoring. |
-| Internal/experimental | Useful for development, demos, and architecture exploration; not a supported production surface. |
+| Stable | Supported for intended lab usage in this repository with clear operating constraints. |
+| Beta | Functional but requires operator control, explicit gating, and close monitoring. |
+| Experimental | Useful for development, demos, and architecture exploration; not a supported production surface. |
 
-### Internal/experimental surfaces in this repository
+### Experimental surfaces in this repository
 
-The `internal/experimental` tier maps to concrete, non-authoritative surfaces such as:
+The `experimental` status maps to concrete, non-authoritative surfaces such as:
 - demo collateral and marketing-oriented plans (for example `DEMO_PLAN.md`, `docs/upwork_demo_execution_plan.md`),
 - architecture review/refactor analysis docs (for example `docs/ddd_clean_architecture_review.md`, `docs/refactor_2024-11-29.md`, `docs/rl_module_reusability_assessment.md`),
 - debugging and exploratory analysis notes (for example `docs/debugging/*`, notebooks under `notebooks/`),
 - convenience wrappers or exploratory orchestration paths not treated as canonical runtime contracts (for example `run_pipeline.py`).
 
+Note: `Experimental` is included in the status legend for full boundary definition. No currently supported mode is classified as `Experimental`; those surfaces are intentionally listed outside the supported-mode contract.
+
 ## Supported modes
 
-| Mode | Tier | Supported today | Gated constraints | Prerequisites |
+### Mode overview
+
+| Mode | Description | Status | Supported today | Intended users |
 |---|---|---|---|---|
-| Research | Production-ready | Yes, for iterative research and architecture work. | No unattended automation claims; results are exploratory by default. | Python/uv environment, repository dependencies installed, local configs. |
-| Offline training | Production-ready | Yes, through the canonical training path. | Requires valid local dataset path and config compatibility; command overrides must match current Hydra schema. | `uv sync`, data file available at configured path, write access for checkpoints/logs. |
-| Evaluation | Production-ready | Yes, as part of canonical training/eval workflow and offline validation surfaces. | Standalone "production evaluator" service is not provided; evaluation is bounded by current scripts and checkpoint compatibility. | Trained checkpoint, compatible feature/config schema, evaluation data availability. |
-| Paper trading (testnet) | Beta/controlled | Yes, via `examples/live_trading_example.py trade` on Binance testnet. | Human-in-the-loop operation required; explicit drawdown/position/rate limits required; testnet only by default policy. | Binance testnet credentials, validated model, safety guard parameters, active monitoring session. |
-| Pre-live validation (historical/integration) | Beta/controlled | Yes, via historical pipeline validation (`validate`) and controlled integration checks. | Validation is pre-live gating only; passing validation is not permission for unattended live execution. | Trained model + optional VecNormalize, historical data access, feature compatibility checks. |
+| Research | Iterative strategy and architecture exploration in lab context. | Stable | Yes | Researchers and developers |
+| Offline training | Canonical model training from historical datasets. | Stable | Yes | Researchers and model developers |
+| Evaluation | Checkpoint evaluation within canonical training/eval workflow. | Stable | Yes | Researchers, reviewers, and release operators |
+| Paper trading (testnet) | Controlled order execution against Binance testnet with operator supervision. | Beta | Yes, via `examples/live_trading_example.py trade` | Human operator and developer during supervised sessions |
+| Pre-live validation (historical/integration) | Historical/integration gating run to validate pipeline readiness before paper trading. | Beta | Yes, via `examples/live_trading_example.py validate` | Human operator and release reviewer |
+
+### Mode operating contract
+
+| Mode | Prerequisites | Constraints | Safety gates |
+|---|---|---|---|
+| Research | Python/uv environment, repository dependencies installed, local configs. | No unattended automation claims; results are exploratory by default. | N/A (non-execution mode). |
+| Offline training | `uv sync`, data file available at configured path, write access for checkpoints/logs. | Requires valid dataset path and config compatibility; overrides must match current Hydra schema. | Data/config compatibility checks before long runs. |
+| Evaluation | Trained checkpoint, compatible feature/config schema, evaluation data availability. | Standalone production evaluator service is not provided; evaluation is bounded by current scripts. | Feature/checkpoint compatibility gate before interpretation. |
+| Paper trading (testnet) | Binance testnet credentials, validated model, safety guard parameters, active monitoring session. | Testnet only by default policy; human-in-the-loop required; no unattended operation. | Drawdown, position-size, trade-rate, and incident-stop gates required. |
+| Pre-live validation (historical/integration) | Trained model + optional VecNormalize, historical data access, feature compatibility checks. | Not live execution; no exchange order placement; passing does not authorize unattended live trading. | Must pass before paper-trading sessions; block on data/feature/model mismatch. |
+
+Paper trading vs pre-live validation distinction:
+- `Pre-live validation` is historical/integration gating only and does not place live orders.
+- `Paper trading` is supervised testnet execution with explicit runtime safety controls.
 
 ## Canonical runtime path
 
@@ -98,6 +116,6 @@ The following are not supported as production guarantees in this repository:
 
 ## Boundary summary
 
-- Supported now: research, offline training/evaluation, controlled paper/pre-live-validation workflows.
+- Supported now: stable research and offline training/evaluation workflows, plus beta paper/pre-live-validation workflows.
 - Not supported now: unattended production live trading.
-- Any move from beta/controlled toward production-ready live execution requires dedicated hardening work, explicit runbooks, and expanded operational controls beyond current repository scope.
+- Any move from beta toward stable live execution requires dedicated hardening work, explicit runbooks, and expanded operational controls beyond current repository scope.
