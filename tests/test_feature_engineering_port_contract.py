@@ -24,6 +24,9 @@ EXPECTED_ENGINEERED_FEATURES = [
 def test_feature_factory_resolves_port_contract() -> None:
     feature_pipeline = create_feature_engineering(pipeline_type="crypto")
     assert isinstance(feature_pipeline, FeatureEngineeringPort)
+    feature_names = feature_pipeline.feature_names
+    assert isinstance(feature_names, list)
+    assert feature_names
 
 
 def test_feature_pipeline_contract_on_fixture_columns_order_types_and_nan() -> None:
@@ -40,6 +43,8 @@ def test_feature_pipeline_contract_on_fixture_columns_order_types_and_nan() -> N
         assert pd.api.types.is_numeric_dtype(transformed_df[column]), (
             f"Engineered feature must be numeric: {column}"
         )
+    for column in feature_pipeline.feature_names:
+        assert column in transformed_df.columns
 
     observed_positions = [transformed_df.columns.get_loc(col) for col in EXPECTED_ENGINEERED_FEATURES]
     assert observed_positions == sorted(observed_positions), (
@@ -66,8 +71,16 @@ def test_canonical_runtime_must_resolve_feature_pipeline_through_factory() -> No
 
     has_factory_call = any(
         isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "create_feature_engineering"
+        and (
+            (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "create_feature_engineering"
+            )
+            or (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "create_feature_engineering"
+            )
+        )
         for node in ast.walk(tree)
     )
     assert has_factory_call, (
