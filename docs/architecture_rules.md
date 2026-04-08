@@ -239,6 +239,30 @@ Expected:
 - second command has at least one match in canonical runtime composition,
 - third command has matches confirming port-based loading in application service.
 
+### Rule 11: Feature engineering must route through FeatureEngineeringPort + factory
+
+Core runtime and use-case surfaces must not import concrete feature pipeline classes.
+Feature pipeline resolution must happen through factory boundary, with application
+services consuming `FeatureEngineeringPort`.
+
+Check by inspection:
+- entrypoints/use-cases do not import `FeaturePipeline` concrete implementation,
+- runtime composition resolves feature pipeline via `create_feature_engineering(...)`,
+- `EnvironmentService` receives feature port and applies `.transform(...)`.
+
+Concrete check commands:
+
+```bash
+rg -n "from rl_trading_lab\\.data\\.feature_pipeline import FeaturePipeline|from rl_trading_lab\\.data import FeaturePipeline" src/rl_trading_lab/application src/rl_trading_lab/domain experiments run_pipeline.py
+rg -n "create_feature_engineering\\(" src/rl_trading_lab/runtime/training_entrypoint.py
+rg -n "FeatureEngineeringPort|_feature_pipeline\\.transform\\(" src/rl_trading_lab/application/services/environment_service.py
+```
+
+Expected:
+- first command has no matches,
+- second command has at least one match in canonical runtime composition,
+- third command has matches confirming port-based feature transformation in application service.
+
 ## Enforcement ticket policy
 
 All architecture enforcement tickets in this project should:

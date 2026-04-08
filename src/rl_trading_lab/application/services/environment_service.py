@@ -18,6 +18,7 @@ from rl_trading_lab.application.ports.environment_factories import (
     EnvAdapterFactory,
     MarketDataAdapterFactory,
 )
+from rl_trading_lab.application.ports.feature_engineering import FeatureEngineeringPort
 from rl_trading_lab.domain.trading_domain import TradingDomain, TradingDomainConfig
 from rl_trading_lab.domain.services.position_sizing import (
     FixedPercentagePositionSizing,
@@ -72,6 +73,7 @@ class EnvironmentService:
         data_loader: DataLoaderPort,
         market_data_factory: MarketDataAdapterFactory,
         env_adapter_factory: EnvAdapterFactory,
+        feature_pipeline: Optional[FeatureEngineeringPort] = None,
     ):
         """
         Initialize the environment service.
@@ -80,10 +82,12 @@ class EnvironmentService:
             data_loader: Port for loading market data
             market_data_factory: Factory creating MarketDataPort adapters
             env_adapter_factory: Factory creating gym-compatible env adapters
+            feature_pipeline: Optional feature engineering port implementation
         """
         self._data_loader = data_loader
         self._market_data_factory = market_data_factory
         self._env_adapter_factory = env_adapter_factory
+        self._feature_pipeline = feature_pipeline
 
     def create_training_env(
         self,
@@ -245,6 +249,10 @@ class EnvironmentService:
         # Load data for mode
         df = self._data_loader.load(data_path, mode=mode)
         logger.info(f"Loaded {mode} data: {len(df)} rows")
+
+        if self._feature_pipeline is not None:
+            df = self._feature_pipeline.transform(df)
+            logger.info(f"Applied feature pipeline for {mode} data: {len(df.columns)} columns")
 
         # Create market data adapter through injected factory
         market_data = self._market_data_factory(df)

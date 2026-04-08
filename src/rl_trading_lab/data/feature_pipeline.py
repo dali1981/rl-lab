@@ -92,6 +92,19 @@ class FeaturePipeline:
                 logger.warning(f"tools directory not found at {tools_path}")
                 self.fracdiff_fn = None
 
+    @property
+    def feature_names(self) -> List[str]:
+        """Names of engineered feature columns produced by this pipeline."""
+        names: List[str] = []
+        for name in self.lookback_periods:
+            if "sma" in name:
+                names.append(f"ratio_{name}_close")
+        names.append("ratio_range_close")
+        names.append(f"fracdiff_{self.fracdiff_d}")
+        if self.compute_zscore:
+            names.extend(f"{base}_zscore" for base in list(names))
+        return names
+
     def transform(
         self,
         df: pd.DataFrame,
