@@ -16,7 +16,10 @@ from rl_trading_lab.config import RootConfig
 from rl_trading_lab.infrastructure.adapters.gym_adapter import GymTradingEnvAdapter
 from rl_trading_lab.infrastructure.adapters.market_data_adapter import ParquetMarketDataAdapter
 from rl_trading_lab.infrastructure.adapters.mlflow_tracker import create_mlflow_tracker
-from rl_trading_lab.infrastructure.factories import create_data_loader
+from rl_trading_lab.infrastructure.factories import (
+    create_data_loader,
+    create_feature_engineering,
+)
 
 
 def _drop_none_values(value: Any) -> Any:
@@ -57,11 +60,16 @@ def build_training_use_case(config: RootConfig) -> TrainAgentUseCase:
         test_split=config.data.test_split,
         required_columns=config.env.required_columns,
     )
+    feature_pipeline = create_feature_engineering(
+        pipeline_type=config.data.feature_pipeline,
+        feature_names=config.observation.input_features,
+    )
 
     environment_service = EnvironmentService(
         data_loader=data_loader,
         market_data_factory=_build_market_data_adapter,
         env_adapter_factory=_build_env_adapter,
+        feature_pipeline=feature_pipeline,
     )
 
     agent_service = AgentService(

@@ -5,11 +5,12 @@ This port decouples the feature engineering strategy from the training
 pipeline, allowing different feature sets for different asset classes.
 """
 
-from typing import List, Protocol
+from typing import List, Protocol, runtime_checkable
 
 import pandas as pd
 
 
+@runtime_checkable
 class FeatureEngineeringPort(Protocol):
     """
     Port for transforming raw OHLCV data into ML features.
