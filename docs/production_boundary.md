@@ -20,15 +20,29 @@ The `experimental` status maps to concrete, non-authoritative surfaces such as:
 - debugging and exploratory analysis notes (for example `docs/debugging/*`, notebooks under `notebooks/`),
 - convenience wrappers or exploratory orchestration paths not treated as canonical runtime contracts (for example `run_pipeline.py`).
 
+Note: `Experimental` is included in the status legend for full boundary definition. No currently supported mode is classified as `Experimental`; those surfaces are intentionally listed outside the supported-mode contract.
+
 ## Supported modes
 
-| Mode | Description | Status | Supported today | Intended users | Prerequisites | Constraints | Safety gates |
-|---|---|---|---|---|---|---|---|
-| Research | Iterative strategy and architecture exploration in lab context. | Stable | Yes | Researchers and developers | Python/uv environment, repository dependencies installed, local configs. | No unattended automation claims; results are exploratory by default. | N/A (non-execution mode). |
-| Offline training | Canonical model training from historical datasets. | Stable | Yes | Researchers and model developers | `uv sync`, data file available at configured path, write access for checkpoints/logs. | Requires valid dataset path and config compatibility; overrides must match current Hydra schema. | Data/config compatibility checks before long runs. |
-| Evaluation | Checkpoint evaluation within canonical training/eval workflow. | Stable | Yes | Researchers, reviewers, and release operators | Trained checkpoint, compatible feature/config schema, evaluation data availability. | Standalone production evaluator service is not provided; evaluation is bounded by current scripts. | Feature/checkpoint compatibility gate before interpretation. |
-| Paper trading (testnet) | Controlled order execution against Binance testnet with operator supervision. | Beta | Yes, via `examples/live_trading_example.py trade` | Human operator and developer during supervised sessions | Binance testnet credentials, validated model, safety guard parameters, active monitoring session. | Testnet only by default policy; human-in-the-loop required; no unattended operation. | Drawdown, position-size, trade-rate, and incident-stop gates required. |
-| Pre-live validation (historical/integration) | Historical/integration gating run to validate pipeline readiness before paper trading. | Beta | Yes, via `examples/live_trading_example.py validate` | Human operator and release reviewer | Trained model + optional VecNormalize, historical data access, feature compatibility checks. | Not live execution; no exchange order placement; passing does not authorize unattended live trading. | Must pass before paper-trading sessions; block on data/feature/model mismatch. |
+### Mode overview
+
+| Mode | Description | Status | Supported today | Intended users |
+|---|---|---|---|---|
+| Research | Iterative strategy and architecture exploration in lab context. | Stable | Yes | Researchers and developers |
+| Offline training | Canonical model training from historical datasets. | Stable | Yes | Researchers and model developers |
+| Evaluation | Checkpoint evaluation within canonical training/eval workflow. | Stable | Yes | Researchers, reviewers, and release operators |
+| Paper trading (testnet) | Controlled order execution against Binance testnet with operator supervision. | Beta | Yes, via `examples/live_trading_example.py trade` | Human operator and developer during supervised sessions |
+| Pre-live validation (historical/integration) | Historical/integration gating run to validate pipeline readiness before paper trading. | Beta | Yes, via `examples/live_trading_example.py validate` | Human operator and release reviewer |
+
+### Mode operating contract
+
+| Mode | Prerequisites | Constraints | Safety gates |
+|---|---|---|---|
+| Research | Python/uv environment, repository dependencies installed, local configs. | No unattended automation claims; results are exploratory by default. | N/A (non-execution mode). |
+| Offline training | `uv sync`, data file available at configured path, write access for checkpoints/logs. | Requires valid dataset path and config compatibility; overrides must match current Hydra schema. | Data/config compatibility checks before long runs. |
+| Evaluation | Trained checkpoint, compatible feature/config schema, evaluation data availability. | Standalone production evaluator service is not provided; evaluation is bounded by current scripts. | Feature/checkpoint compatibility gate before interpretation. |
+| Paper trading (testnet) | Binance testnet credentials, validated model, safety guard parameters, active monitoring session. | Testnet only by default policy; human-in-the-loop required; no unattended operation. | Drawdown, position-size, trade-rate, and incident-stop gates required. |
+| Pre-live validation (historical/integration) | Trained model + optional VecNormalize, historical data access, feature compatibility checks. | Not live execution; no exchange order placement; passing does not authorize unattended live trading. | Must pass before paper-trading sessions; block on data/feature/model mismatch. |
 
 Paper trading vs pre-live validation distinction:
 - `Pre-live validation` is historical/integration gating only and does not place live orders.
