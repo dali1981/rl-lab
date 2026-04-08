@@ -184,6 +184,32 @@ rg -n "from (experiments|examples)\\.|import (experiments|examples)\\." src/rl_t
 
 Expected: no matches.
 
+### Rule 9: Trainer orchestration path is singular
+
+Trainer orchestration must have one authoritative path:
+- `src/rl_trading_lab/agents/trainer.py` (trainer implementation),
+- `src/rl_trading_lab/agents/trainer_factory.py` (project-specific composition).
+
+`src/rl_trading_lab/agents/sb3_agents.py` is compatibility-only and must remain a thin facade.
+
+Check by inspection:
+- `sb3_agents.py` contains re-export/facade imports only (no trainer orchestration implementation),
+- `trainer_factory.py` imports `Trainer` from `agents.trainer`,
+- new production wiring does not import `Trainer` from `agents.sb3_agents`.
+
+Concrete check commands:
+
+```bash
+rg -n "class Trainer|stable_baselines3|CallbackList|evaluate_policy" src/rl_trading_lab/agents/sb3_agents.py
+rg -n "from rl_trading_lab\\.agents\\.trainer import Trainer" src/rl_trading_lab/agents/trainer_factory.py
+rg -n "from rl_trading_lab\\.agents\\.sb3_agents import Trainer" src tests experiments run_pipeline.py
+```
+
+Expected:
+- first command has no matches except facade comments/docstring text,
+- second command has one match,
+- third command has no matches (or compatibility-only legacy references under controlled migration).
+
 ## Enforcement ticket policy
 
 All architecture enforcement tickets in this project should:
@@ -197,6 +223,7 @@ All architecture enforcement tickets in this project should:
 The following project tickets are the enforcement set that should reference this document:
 - `DAL-127` Enforce canonical runtime path across entrypoints
 - `DAL-134` Enforce application layer usage
+- `DAL-135` Consolidate trainer architecture
 - `DAL-140` Deprecate legacy environment path
 - `DAL-141` Enforce data loader port usage
 - `DAL-142` Enforce feature engineering port usage
