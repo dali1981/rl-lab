@@ -8,12 +8,20 @@ Demonstrates that the extracted RL module is reusable beyond trading:
 """
 
 from pathlib import Path
+import warnings
 import gymnasium as gym
 from stable_baselines3 import PPO
 
 from rl_trading_lab.agents.sb3_agents import Trainer
 from rl_trading_lab.agents.env_wrapper import EnvWrapperBuilder
 from rl_trading_lab.agents.callback_factory import CallbackFactory
+
+warnings.simplefilter("default", DeprecationWarning)
+warnings.warn(
+    "This entrypoint is a demo/research surface and not part of the canonical runtime path. "
+    "Use experiments/train.py for canonical core workflows.",
+    DeprecationWarning,
+)
 
 
 def main():

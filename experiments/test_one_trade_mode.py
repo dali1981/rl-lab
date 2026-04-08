@@ -11,11 +11,19 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import sys
+import warnings
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.rl_trading_lab.environment.trading_env import TradingEnv, Action
+
+warnings.simplefilter("default", DeprecationWarning)
+warnings.warn(
+    "This entrypoint is a legacy compatibility harness and not part of the canonical runtime path. "
+    "Use experiments/train.py for canonical core workflows.",
+    DeprecationWarning,
+)
 
 
 def create_test_data(n_bars=500):

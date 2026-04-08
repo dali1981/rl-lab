@@ -21,6 +21,12 @@ Architecture Rules Reference: docs/architecture_rules.md
 
 ## Rule set
 
+### Composition root note
+
+`src/rl_trading_lab/runtime/` is the runtime composition root.
+It may wire application services/use cases to infrastructure adapters for executable entrypoints.
+This exception applies only to dependency assembly, not to domain/business logic placement.
+
 ### Rule 1: Domain purity
 
 `src/rl_trading_lab/domain/` must not import framework/infrastructure libraries, including:

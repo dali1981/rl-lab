@@ -2,6 +2,9 @@
 """
 Run Kedro data pipeline and then train RL agent.
 This ensures fresh data for each training run.
+
+Canonical training orchestration is delegated to `experiments/train.py`,
+which routes through `TrainAgentUseCase`.
 """
 
 import subprocess
@@ -35,11 +38,12 @@ def run_kedro_pipeline():
 
 
 def train_rl_agent(args):
-    """Train RL agent with provided arguments"""
-    print("🚀 Training RL agent...")
+    """Train RL agent through the canonical training entrypoint."""
+    print("Running canonical training entrypoint...")
 
     # Build command
-    cmd = ["python", "experiments/train.py"] + args
+    train_script = Path(__file__).parent / "experiments" / "train.py"
+    cmd = [sys.executable, str(train_script)] + args
 
     # Run training
     result = subprocess.run(cmd)
@@ -48,8 +52,10 @@ def train_rl_agent(args):
 
 
 if __name__ == "__main__":
+    help_requested = "--help" in sys.argv or "-h" in sys.argv
+
     # Run Kedro pipeline
-    if "--skip-kedro" not in sys.argv:
+    if "--skip-kedro" not in sys.argv and not help_requested:
         success = run_kedro_pipeline()
         if not success:
             print("⚠️  Kedro pipeline failed, using existing data")
