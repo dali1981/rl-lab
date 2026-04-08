@@ -15,7 +15,7 @@ Upwork clients seeking:
 
 **Opening (10 sec)**
 - Terminal: Show project structure with `tree -L 2`
-- Voiceover: "Research RL trading lab - training to controlled live validation"
+- Voiceover: "Research RL trading lab - training to controlled pre-live validation"
 
 **Act 1: Training (45 sec)**
 ```bash
