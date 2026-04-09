@@ -102,6 +102,7 @@ Trainer implementation/composition surfaces:
 - [Production boundary & supported modes](docs/production_boundary.md) (authoritative)
 - [Canonical runtime execution path](docs/runtime_path.md) (authoritative)
 - [Architecture rules](docs/architecture_rules.md) (authoritative)
+- [Live trading isolation boundary](docs/live_trading.md) (authoritative)
 - [Observability contract](docs/observability.md) (authoritative)
 - [Architecture overview](docs/architecture.md)
 - [Configuration & experiments](docs/configuration.md)

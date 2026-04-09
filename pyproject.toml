@@ -32,8 +32,6 @@ dependencies = [
     "pydantic>=2.12.3",
     "notebook>=7.4.7",
     "typer>=0.9.0", # CLI interface
-    # Trading & Exchange APIs
-    "python-binance>=1.0.19", # Binance API for testnet trading
     "sb3-contrib>=2.7.0",
 ]
 
@@ -51,6 +49,10 @@ dev = [
 
 ray = [
     "ray[rllib]>=2.7.0",  # For distributed training later
+]
+
+live = [
+    "python-binance>=1.0.19", # Binance API for testnet/paper trading integration
 ]
 
 [build-system]
