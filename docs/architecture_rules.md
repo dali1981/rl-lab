@@ -156,6 +156,29 @@ rg -n "from rl_trading_lab\\.live|import rl_trading_lab\\.live" src/rl_trading_l
 
 Expected: no matches.
 
+DAL-143 enforcement note:
+- core offline training/evaluation paths must also avoid live imports:
+  - `experiments/train.py`
+  - `run_pipeline.py`
+  - `src/rl_trading_lab/runtime/training_entrypoint.py`
+  - `src/rl_trading_lab/application/use_cases/train_agent.py`
+  - `src/rl_trading_lab/application/use_cases/evaluate_agent.py`
+- live dependency installation is optional via `uv sync --extra live`.
+- isolation policy and prerequisites are documented in `docs/live_trading.md`.
+
+Concrete DAL-143 check commands:
+
+```bash
+rg -n "from rl_trading_lab\\.live|import rl_trading_lab\\.live" experiments/train.py run_pipeline.py src/rl_trading_lab/runtime/training_entrypoint.py src/rl_trading_lab/application/use_cases/train_agent.py src/rl_trading_lab/application/use_cases/evaluate_agent.py
+rg -n "^live\\s*=\\s*\\[" pyproject.toml
+rg -n "optional bounded integration zone|not part of the canonical offline training/evaluation path|uv sync --extra live|prerequisites" docs/live_trading.md
+```
+
+Expected:
+- first command has no matches,
+- second command has one match defining `[project.optional-dependencies].live`,
+- third command has matches confirming isolation policy + prerequisites.
+
 ### Rule 7: Ports define dependencies across boundaries
 
 Cross-layer dependencies should be expressed via port interfaces:
