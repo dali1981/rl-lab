@@ -40,6 +40,15 @@ Additional prerequisites for live/paper modes:
 - a compatible trained checkpoint and feature configuration,
 - operator-supervised sessions with explicit safety controls.
 
+## Validation Smoke
+
+After installing live extras, verify the live integration CLI surface loads:
+
+```bash
+uv sync --extra live
+uv run python examples/live_trading_example.py validate --help
+```
+
 ## Supported Entry Surfaces
 
 Optional live integration surfaces include:

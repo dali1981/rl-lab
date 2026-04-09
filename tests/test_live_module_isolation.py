@@ -30,16 +30,24 @@ def test_live_dependencies_are_optional_extra_only() -> None:
 
 
 def test_core_training_eval_paths_do_not_import_live_modules() -> None:
-    targets = [
+    direct_targets = [
         ROOT / "experiments" / "train.py",
         ROOT / "run_pipeline.py",
         ROOT / "src" / "rl_trading_lab" / "runtime" / "training_entrypoint.py",
-        ROOT / "src" / "rl_trading_lab" / "application" / "use_cases" / "train_agent.py",
-        ROOT / "src" / "rl_trading_lab" / "application" / "use_cases" / "evaluate_agent.py",
     ]
+    recursive_targets = []
+    for root in (
+        ROOT / "src" / "rl_trading_lab" / "application",
+        ROOT / "src" / "rl_trading_lab" / "domain",
+    ):
+        if root.exists():
+            recursive_targets.extend(sorted(root.rglob("*.py")))
+    targets = [*direct_targets, *recursive_targets]
     violations: list[str] = []
 
     for path in targets:
+        if not path.exists():
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module:
