@@ -25,9 +25,8 @@ from rl_trading_lab.domain.services.position_sizing import (
     PositionSizingService,
 )
 from rl_trading_lab.domain.services.reward_calculation import (
-    ReturnsRewardCalculation,
-    PnLRewardCalculation,
     RewardCalculationService,
+    create_reward_service,
 )
 from rl_trading_lab.domain.services.risk_management import (
     RiskLimits,
@@ -260,12 +259,7 @@ class EnvironmentService:
         # Create or use provided domain services
         pos_sizing = position_sizing or FixedPercentagePositionSizing()
 
-        if reward_calculator:
-            reward_calc = reward_calculator
-        elif reward_type == "returns":
-            reward_calc = ReturnsRewardCalculation()
-        else:
-            reward_calc = PnLRewardCalculation()
+        reward_calc = reward_calculator or create_reward_service(reward_type=reward_type)
 
         risk_mgmt = risk_manager or StandardRiskManagement(
             RiskLimits(
