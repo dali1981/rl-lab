@@ -21,6 +21,21 @@ Architecture Rules Reference: docs/architecture_rules.md
 
 ## Rule set
 
+### Responsibility Ownership Table (DAL-144)
+
+The following responsibilities must have one canonical owner in core runtime paths.
+
+| Responsibility | Canonical owner | Allowed support surfaces | Not allowed in canonical core paths |
+|---|---|---|---|
+| Environment assembly (domain + adapter wiring) | `src/rl_trading_lab/application/services/environment_service.py` | `src/rl_trading_lab/runtime/training_entrypoint.py` for dependency wiring only | direct domain/environment construction in use cases or core entry scripts |
+| Reward/risk policy choice | domain service factories/config consumed by `EnvironmentService` (`create_reward_service`, `RiskLimits`) | explicit custom injection in tests/experiments | ad-hoc reward selection logic duplicated across use cases/entrypoints |
+| Checkpoint lifecycle (save/best/final callbacks) | `src/rl_trading_lab/application/services/checkpoint_service.py` | compatibility trainer stack (`src/rl_trading_lab/agents/*`) outside canonical path | direct checkpoint manager orchestration in canonical use cases/runtime scripts |
+| Data split logic (train/eval/test boundaries) | Data loader implementations behind `DataLoaderPort` (`load(mode=...)`) | legacy compatibility data processor paths | manual split/index slicing in canonical use cases/services |
+| Evaluation metrics ownership | `src/rl_trading_lab/application/use_cases/evaluate_agent.py` | training-loop callback metrics during fit | duplicate standalone evaluation-metric calculators in canonical core modules |
+
+DAL-144 scope note:
+- legacy/deprecated compatibility modules may still contain transitional code, but canonical offline flow must follow the owner assignments above.
+
 ### Composition root note
 
 `src/rl_trading_lab/runtime/` is the runtime composition root.
